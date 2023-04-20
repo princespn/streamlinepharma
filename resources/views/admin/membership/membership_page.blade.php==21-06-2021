@@ -1,0 +1,97 @@
+@extends('layouts.app')
+
+@section('pageTitle')
+
+<div class="float-right">
+
+    <a class="btn btn-outline-light" href="{{url('admin/membership')}}">Membership</a>
+    <a class="btn btn-outline-light" href="{{url('admin/membership_page')}}">Membership Page</a>
+</div>
+
+<h4 class="page-title"> <i class="dripicons-calendar"></i>Membership Page</h4>
+
+@endsection
+
+@section('contentData')
+
+<div class="row">
+    <div class="col-6">
+        <div class="card m-b-20">
+		    <div class="card-header">Membership Page</div>
+            <div class="card-body">
+			    @if (session('status'))
+					<div class="alert alert-success">
+						{{ session('status') }}
+					</div>
+				@endif
+                {!! Form::open(['url' => 'admin/membership_page','method'=>'POST','id'=>'form']) !!}
+                {{ csrf_field() }}
+                  <div class="form-group">
+					<label for="title">Title:</label>
+					<textarea type="text" class="summernote form-control" placeholder="" id="title" name='title' required >@if(isset($mem_data)) {{ $mem_data->title }} @endif</textarea>
+				  </div>
+				  <div class="form-group">
+					<label for="sub_title">Sub Title:</label>
+					<textarea type="text" class="summernote form-control" placeholder="" id="sub_title" name='sub_title' required >@if(isset($mem_data)) {{ $mem_data->sub_title }} @endif</textarea>
+				  </div>
+				  
+				  
+				  
+				  
+				  <div class="form-group">
+					<label for="image">Image:</label>
+					<input type='text' @if(isset($mem_data)) value='{{ $mem_data->image }}' @endif class='form-control' name='image' id='image'>
+				  </div>
+				  
+				  
+				  <div class="form-group">
+					<label for="sorting_order">Sorting Order :</label>
+					<input type="number" class="form-control" placeholder="" id="sorting_order" name='sorting_order' @if(isset($mem_data)) value='{{ $mem_data->sorting_order }}' @endif>
+				  </div>
+				  
+				  @if(isset($mem_data))
+					  <input type='hidden' name='id' value='{{ $mem_data->id }}'>
+				  @endif
+				  <button type="submit" class="btn btn-primary">@if(isset($mem_data)) Update @else Submit @endif</button>
+                {!! Form::close() !!}
+            </div>
+        </div>
+    </div>
+	<div class="col-6">
+        <div class="card m-b-20">
+		    <div class="card-header">Membership Page</div>
+            <div class="card-body">
+			    <table class='table table-bordered table-striped table-responsive'>
+				  <thead>
+				    <tr>
+					  <th>Title</th>
+					  <th>Sub Title</th>
+					  <th>Image</th>
+					  <th>Sorting Order</th>
+					  
+					  <th>Action</th>
+					</tr>
+				  </thead>
+				  <tbody>
+				  @if(count($data))
+					  @foreach($data as $row)
+					    <tr>
+						   <td>{!! $row->title !!}</td>
+						   <td>{!! $row->sub_title !!}</td>
+						   <td><img width='80' src="{{ $row->image }}"></td>
+						   <td>{!! $row->sorting_order !!}</td>
+						   
+						   <td><a href="{{ url('admin/membership_page/'.$row->id) }}" class='btn btn-outline-primary btn-sm'>View or Edit</a></td>
+						</tr>
+					  @endforeach
+				  @else
+					<tr><th colspan='5'>No Data Found!</th></tr>  
+				  @endif
+				  </tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+</div>
+
+@endsection

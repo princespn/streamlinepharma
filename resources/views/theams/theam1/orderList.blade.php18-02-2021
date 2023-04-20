@@ -1,0 +1,343 @@
+@extends('theams/theam1/layouts.app')
+
+@section('theme1Content')
+
+   <!-- Page Banner -->
+   <div class="page-banner container-fluid no-padding">
+    <!-- Container -->
+    <div class="container">
+        <div class="banner-content">
+            <h3>OrderList</h3>
+            <p>our vision is to be Earth's most customer centric company</p>
+        </div>
+        <ol class="breadcrumb">
+            <li><a href="/" title="Home">Home</a></li>							
+            <li class="active">orderList</li>
+        </ol>
+    </div><!-- Container /- -->
+</div><!-- Page Banner /- -->
+<!-- Checkout -->
+<div class="container-fluid contact-us no-left-padding no-right-padding woocommerce-checkout">
+    <!-- Container -->
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-9 col-md-9 col-sm-12 col-xs-12">
+                <input type="hidden" value="{{ csrf_token() }}" id="csrfToken">
+                <form>
+                    @foreach ($orderList as $order)
+                        <!-- <h3>
+                            <a href="{{route('orderReturn', array('orderNo' => $order->orderNo))}}" style="margin-left: 20px;">
+                            Return order
+                            </a>
+                        </h3> -->
+                        
+                        <div class="col-lg-12">
+                            <div class="order-summary">
+                                <div class="collapse in" id="order-cart-section">
+                                    <table class="table table-mini-cart">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:65%">
+                                                    <span style="display:block">{{$order->name}}</span>
+                                                    <span style="display:block">{{$order->phone}}</span>
+                                                    <span style="display:block">{{$order->email}}</span>
+                                                    <span style="display:block">{{$order->landmark}},{{$order->address}},{{$order->zipCode}}</span>
+                                                    <span style="display:block">{{$order->variation4}}</span> 
+                                                </th>
+                                                <th>
+                                                    <span style="display:block">
+                                                        {{$order->orderNo}}
+                                                    </span>
+                                                    <span style="display:block">{{$order->transactionId}}</span>
+                                                    <span style="display:block">{{ date('d-m-Y h:m a', strtotime($order->created_at))  }}</span>
+                                                </th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            @php
+                                                $todayDate = date('Y-m-d');
+                                                $grandTotal = 0;
+                                            @endphp
+                                            
+                                            @foreach ($order->orderDetails as $orderDetail)
+
+                                            @php 
+                                                $totalAmt = 0; 
+                                                $totalTax = 0;
+                                                $totalShipping = 0;
+                                            @endphp
+
+                                            <tr>
+                                                <td class="product-col">
+                                                    <figure class="product-image-container">
+                                                        <img src="{{ $orderDetail->imageURL0 }}" style="height: 100px;">
+                                                    </figure>
+                                                    <div>
+                                                        <h2 class="product-title" style="max-width: none;">
+                                                            {{ $orderDetail->productName }}
+                                                        </h2>
+
+                                                        <span class="product-qty">{{$orderDetail->sku}}</span>
+                                                        <span class="product-qty">{{$orderDetail->variation0}}</span>
+                                                        <span class="product-qty">{{$orderDetail->variation1}}</span>
+                                                        <span class="product-qty">{{$orderDetail->variation2}}</span>
+                                                        <span class="product-qty">{{$orderDetail->variation3}}</span>
+                                                        <span class="product-qty">{{$orderDetail->variation4}}</span>
+                                                    </div>
+                                                </td>
+                                                <td class="price-col">
+                                                    @php
+                                                        if($orderDetail->orderOffers) {
+
+                                                            if($orderDetail->price >= $orderDetail->orderOffers->offer->cartMinValue)
+                                                            {
+                                                                $basePrice = $orderDetail->price - ($orderDetail->price * $orderDetail->orderOffers->offer->discount / 100);
+                                                            } else {
+                                                                $basePrice = $orderDetail->price;
+                                                            }
+                                                        } else {
+                                                            $basePrice = $orderDetail->price;
+                                                        }
+                                                        
+                                                        $totalAmt += ($orderDetail->qty) * ($basePrice);
+                                                        $totalTax += ($orderDetail->qty) * ($basePrice * $orderDetail->tax /100);
+                                                        $totalShipping += ($orderDetail->qty) * ($orderDetail->shipping);
+                                                    @endphp
+
+                                                    <span class="product-title">Price : 
+                                                        @if($orderDetail->orderOffers)
+                                                            Rs. {{number_format($basePrice,2)}}
+                                                                <sub><del>{{number_format($orderDetail->price,2)}}</del></sub>
+                                                        @else
+                                                            Rs. {{number_format($orderDetail->price,2)}}
+                                                        @endif
+                                                    </span>
+
+                                                    <span class="product-qty">Qty : {{number_format($orderDetail->qty,2)}}</span>
+                                                    <span class="product-qty">Sub Total : Rs. {{number_format($totalAmt,2)}}</span>
+                                                    <span class="product-qty">Tax ({{$orderDetail->tax}} %) : Rs. {{number_format($totalTax,2)}}</span>
+                                                    <span class="product-qty">Shipping : Rs. {{number_format($totalShipping,2)}}</span>
+                                                    <span class="product-qty">Net Total: Rs. {{number_format($totalAmt + $totalTax + $totalShipping,2)}}</span>
+
+                                                    {{-- Grand Total Rs. {{ number_format( ( ($orderDetail->price * $orderDetail->tax /100) * ($orderDetail->qty) ) + (($orderDetail->price) * ($orderDetail->qty)),2)}} --}}
+                                                </td>
+                                            </tr>
+                                            @php 
+                                                $grandTotal += $totalTax + $totalAmt + $totalShipping;
+                                            @endphp
+
+                                            @endforeach
+                                        </tbody>
+
+                                        <tfoot>
+                                            <tr>
+                                                <td class="product-col form-group">
+                                                    @if($order->orderAcceptance==1)
+
+                                                        @if($order->courierType == 1)
+
+                                                            <!--ShipYaari Order Management-->
+                                                            @if(json_decode($order->shipyaariOrder,true)['tracking_number']?? '')
+                                                                @if($order->orderStatus == 1) 
+                                                                    <button type="button">
+                                                                        <a href="https://seller.shipyaari.com/avn_ci/siteadmin/track/trackShipment/{{json_decode($order->shipyaariOrder,true)['tracking_number']?? '' }}" target="_blank">
+                                                                            Track your order
+                                                                        </a>
+                                                                    </button> &nbsp;&nbsp;&nbsp;
+                                                                @endif
+
+                                                                @if($order->orderStatus <= 3)
+                                                                    <button type="button">
+                                                                        <a href="#!" onclick="orderCancel({{$order->orderNo}},'{{json_decode($order->shipyaariOrder,true)['avn_shipping_id']?? '' }}')">
+                                                                            Cancel your order
+                                                                        </a>
+                                                                    </button> &nbsp;&nbsp;&nbsp;
+                                                                @endif
+
+                                                                @if($order->orderStatus == 4)
+                                                                    <button type="button">
+                                                                        <a href="#!">
+                                                                            Order delivered
+                                                                        </a>
+                                                                    </button> &nbsp;&nbsp;&nbsp;
+                                                                    
+                                                                    @if(($orderDetail->inventoryPackaging->returnOrder == 1) && ($todayDate <=  date('Y-m-d', strtotime($order->updated_at->addDays($orderDetail->inventoryPackaging->returnOrderDays) ) ) ) )
+                                                                        <button type="button">
+                                                                            <a href="{{route('orderReturn', array('orderNo' => $order->orderNo))}}">
+                                                                                Return order
+                                                                            </a>
+                                                                        </button> &nbsp;&nbsp;&nbsp;
+                                                                    @endif
+
+                                                                    @if(($orderDetail->inventoryPackaging->replacementOrder == 1) && ($todayDate <=  date('Y-m-d', strtotime($order->updated_at->addDays($orderDetail->inventoryPackaging->replacementOrderDays) ) ) ) )
+                                                                        <button type="button">
+                                                                            <a href="{{route('orderReplacement', array('orderNo' => $order->orderNo))}}">
+                                                                            Replace order
+                                                                            </a>
+                                                                        </button> &nbsp;&nbsp;&nbsp;
+                                                                    @endif
+
+                                                                @endif
+
+                                                                @if($order->orderStatus == 18) 
+                                                                    <button type="button">
+                                                                        <a href="#!">
+                                                                            Order canceled
+                                                                        </a>
+                                                                    </button> &nbsp;&nbsp;&nbsp;
+                                                                @endif
+
+                                                                @if($order->orderStatus == 9)
+                                                                    <button type="button">
+                                                                        <a href="#!">
+                                                                            Order returned 
+                                                                        </a>
+                                                                    </button> &nbsp;&nbsp;&nbsp;
+                                                                @endif
+
+                                                                @if($order->orderStatus == 19)
+                                                                    <button type="button">
+                                                                        <a href="#!">
+                                                                            Order replaced 
+                                                                        </a>
+                                                                    </button> &nbsp;&nbsp;&nbsp;
+                                                                @endif
+                                                                
+                                                            @endif
+                                                            <!--ShipYaari Order Management-->
+                                                        @else
+                                                            <!--Other Order Management-->
+                                                            @if($order->orderStatus == 1)                                                        
+                                                                @php 
+                                                                    $courier = explode('#@#',$order->shipyaariOrder);
+                                                                @endphp
+
+                                                                @if(count($courier) == 2)
+
+                                                                    <a type="button">Traking Number {{$courier[1]}}</a> &nbsp;&nbsp;&nbsp;
+
+                                                                    <button type="button">
+                                                                        <a href="{{$courier[0]}}" target="_blank">
+                                                                            Track your order
+                                                                        </a>
+                                                                    </button> &nbsp;&nbsp;&nbsp;
+                                                                @endif
+
+                                                                <button type="button">
+                                                                    <a href="#!" onclick="orderCancel({{$order->orderNo}},'courierType')">
+                                                                        Cancel your order
+                                                                    </a>
+                                                                </button> &nbsp;&nbsp;&nbsp;
+                                                            @endif
+
+                                                            @if($order->orderStatus == 4)
+                                                                <button type="button">
+                                                                    <a href="#!">
+                                                                        Order delivered
+                                                                    </a>
+                                                                </button> &nbsp;&nbsp;&nbsp;
+
+                                                                @if(($orderDetail->inventoryPackaging->returnOrder == 0) && ($todayDate <=  date('Y-m-d', strtotime($order->updated_at->addDays($orderDetail->inventoryPackaging->returnOrderDays) ) ) ) )
+                                                                    <button type="button">
+                                                                        <a href="{{route('orderReturn', array('orderNo' => $order->orderNo))}}">
+                                                                            Return order
+                                                                        </a>
+                                                                    </button> &nbsp;&nbsp;&nbsp;
+                                                                @endif
+
+                                                                @if(($orderDetail->inventoryPackaging->replacementOrder == 0) && ($todayDate <=  date('Y-m-d', strtotime($order->updated_at->addDays($orderDetail->inventoryPackaging->replacementOrderDays) ) ) ) )
+                                                                    <button type="button">
+                                                                        <a href="{{route('orderReplacement', array('orderNo' => $order->orderNo))}}">
+                                                                        Replace order
+                                                                        </a>
+                                                                    </button> &nbsp;&nbsp;&nbsp;
+                                                                @endif
+
+                                                            @endif
+
+                                                            @if($order->orderStatus == 18) 
+                                                                <button type="button">
+                                                                    <a href="#!">
+                                                                        Order canceled
+                                                                    </a>
+                                                                </button> &nbsp;&nbsp;&nbsp;
+                                                            @endif
+
+                                                            @if($order->orderStatus == 9)
+                                                                <button type="button">
+                                                                    <a href="#!">
+                                                                        Order returned 
+                                                                    </a>
+                                                                </button> &nbsp;&nbsp;&nbsp;
+                                                            @endif
+
+                                                            @if($order->orderStatus == 19)
+                                                                <button type="button">
+                                                                    <a href="#!">
+                                                                        Order replaced 
+                                                                    </a>
+                                                                </button> &nbsp;&nbsp;&nbsp;
+                                                            @endif
+                                                            <!--Other Order Management-->
+                                                        @endif
+
+                                                    @elseif($order->orderAcceptance == 2)
+                                                        <button type="button">Order rejected</button>
+                                                    @else
+                                                        <button type="button">
+                                                            Order Waiting For Acceptance.
+                                                        </button>
+                                                    @endif
+
+                                                </td>
+                                                <td class="price-col">
+                                                    <h1 style="margin: 0px;">Rs. {{number_format($grandTotal,2)}}</h1>
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div><!-- End #order-cart-section -->
+                            </div><!-- End .order-summary -->
+
+                        </div>
+                    @endforeach
+                </form>
+            </div>
+            <div class="col-lg-3 col-md-3 col-sm-12 col-xs-12">
+                <div id="footer-main" class="footer-main container-fluid" style="padding-left:20px;margin-top:30px;">
+
+                    <!-- Container -->
+        
+                    <div class="container">
+        
+                        <div class="row">
+        
+                            <!-- Widget Links -->
+        
+                            <aside class="col-md-3 col-sm-6 col-xs-6 ftr-widget widget_links">
+        
+                                <h4 style="margin-top: -45px;padding-bottom:10px;">Useful Link</h4>
+        
+                                <ul>
+        
+                                    <li><a href="{{route('orderList')}}" title="About Us">Order</a></li>
+        
+                                    <li><a href="{{route('changePassword')}}" title="Privacy Policy">Change Password</a></li>
+        
+                                    <li><a href="{{route('address')}}" title="Shipping Policy">Update Address</a></li>                      
+        
+                                </ul>
+        
+                            </aside>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- Container /- -->
+
+</div><!-- Checkout /- -->
+
+@endsection

@@ -1,0 +1,252 @@
+@extends('layouts.app')
+
+
+
+@section('pageTitle')
+
+
+
+    @if (count($vendorKycList) == 0)
+
+        <div class="float-right">
+
+            <a href="{{route('vendorKyc.create')}}" class="btn btn-outline-light">
+
+                Add vendor KYC
+
+            </a>
+
+        </div>
+
+    @endif
+
+
+
+    <h4 class="page-title"> <i class="dripicons-tags"></i> Vendor KYC listing</h4>
+
+
+
+@endsection
+
+
+
+@section('contentData')
+
+
+
+    <div class="row">
+
+        <div class="col-12">
+
+            <div class="card m-b-20">
+
+                <div class="card-body">
+
+                    <table id="datatable" class="table table-bordered">
+
+                        <thead>
+
+                            <tr>
+
+                                <th>#</th>
+
+                                <th>Co. Name</th>
+
+                                <th>Co. Type</th>
+
+                                <th>Co. Address</th>
+
+                                <th>Co. Address Proof</th>
+
+                                <th>KYC</th>
+
+                                <th>Status</th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            @foreach ($vendorKycList as $key=>$vendorKyc)
+
+                                <tr>
+
+                                    <td>
+
+                                        <!--Delete Popup-->
+
+                                        <!--
+                                        <i class="mdi mdi-delete btn btn-outline-danger" data-toggle="modal" data-target=".deletePopup{{$vendorKyc->id}}" title="Delete this data"></i>
+
+                                        <div class="modal fade deletePopup{{$vendorKyc->id}}" tabindex="-1" role="dialog" aria-labelledby="mySmallModalLabel" aria-hidden="true">
+
+                                            <div class="modal-dialog modal-dialog-centered">
+
+                                                <div class="modal-content">
+
+                                                    <div class="modal-header">
+
+                                                        <h5 class="modal-title mt-0">{{$vendorKyc->companyName}}</h5>
+
+                                                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+
+                                                    </div>
+
+                                                    <div class="modal-body">
+
+                                                        <p>Are you sure want to delete this?</p>
+
+                                                    </div>
+
+                                                    <div class="modal-footer">
+
+                                                        {{ Form::open(array('url' => 'admin/vendorKyc/' . $vendorKyc->id)) }}
+
+                                                        {{ Form::hidden('_method', 'DELETE') }}
+
+                                                            <button type="submit" class="btn btn-outline-danger">Yes</button>
+
+                                                        {{ Form::close() }}
+
+                                                    </div>
+
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+                                        -->
+
+                                        <!--Edit Icon-->
+
+                                        <a href="{{ URL::to('admin/vendorKyc/'. $vendorKyc->id.'/edit') }}">
+
+                                            <i class="mdi mdi-pencil btn btn-outline-primary" title="Edit this data"></i>
+
+                                        </a>
+                                       
+                                        @if($vendorKyc->kycStatus == 0 OR $vendorKyc->kycStatus == 3)
+                                            <a href="{{url("admin/approveKYC/".$vendorKyc->id)}}">
+                                                <i class="mdi mdi-account-key btn btn-outline-warning" title="Send to QC"></i>
+                                            </a>
+                                        @endif
+
+                                    </td>
+
+                                    <td>{{$vendorKyc->companyName}}</td>
+
+                                    <td>
+
+                                        @switch($vendorKyc->companyType)
+
+                                            @case(1)
+
+                                                Limited Company
+
+                                                @break
+
+
+
+                                            @case(2)
+
+                                                Private Limited Company
+
+                                                @break
+
+
+
+                                            @case(3)
+
+                                                Partnership Firm
+
+                                                @break
+
+
+
+                                            @case(4)
+
+                                                Proprietorship
+
+                                                @break
+
+
+
+                                            @default
+
+                                                LLP
+
+                                        @endswitch
+
+                                    </td>
+
+                                    <td>{{$vendorKyc->kycAddress}}</td>
+
+                                    <td>{{$vendorKyc->kycAddressProof}}</td>
+
+                                    <td>
+
+                                        @switch($vendorKyc->kycStatus)
+
+                                            @case(0)
+
+                                                Ready for send to kyc
+
+                                            @break
+
+                                            @case(1)
+
+                                                Sent for kyc
+
+                                            @break
+
+                                            @case(2)
+
+                                                Approved
+
+                                            @break
+
+                                            @default
+
+                                                Refused
+
+                                        @endswitch
+                                    </td>
+
+                                    <td>
+
+                                        @if ($vendorKyc->status == 1)
+
+                                            <i class="mdi mdi-checkbox-blank-circle text-success"></i> Active
+
+                                        @else
+
+                                            <i class="mdi mdi-checkbox-blank-circle text-warning"></i> Inactive
+
+                                        @endif
+
+                                    </td>
+
+                                </tr>
+
+                                
+
+                            @endforeach
+
+                        </tbody>
+
+                    </table>
+
+
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+@endsection

@@ -1,0 +1,78 @@
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
+use Illuminate\Support\Facades\Gate;
+use View;
+use DB;
+use Session;
+use App\Http\Controllers\Controller;
+use App\Models\AdvanceProductCart;
+class AuthServiceProvider extends ServiceProvider
+{
+    /**
+     * The policy mappings for the application.
+     *
+     * @var array
+     */
+    protected $policies = [
+        // 'App\Model' => 'App\Policies\ModelPolicy',
+    ];
+
+    /**
+     * Register any authentication / authorization services.
+     *
+     * @return void
+     */
+    public function boot()
+    {
+		view()->composer('*', function($view) {
+		$domainName = (new Controller)->activeDomain();
+
+        $account = DB::table('accounts') 
+		           ->where('domain', $domainName)->first();
+		if($account){
+           $dynamic_menu = DB::table('faq')
+		                   ->where('account_id',$account->id)
+						   ->get();
+			$register = Session::get('register');
+			if($register){
+            $registerId = $register->id;
+			}else{
+            $registerId = '';
+			}
+			$cartList      = AdvanceProductCart::select('advance_product_cart.qty','advance_product.thumbnail','advance_product.title','advance_product.selling_price','advance_product.product_tax','advance_product.id')
+			                 ->leftJoin('advance_product','advance_product.id','=','advance_product_cart.product_id')
+			                 ->where('register_id',Session::getId())
+			                 ->get();
+			
+            View::share('dynamic_menu', $dynamic_menu);
+            View::share('cartList', $cartList);
+            
+		}
+		    $order_status = [
+			                 'Order Placed',
+							 'Payment Pending',
+							 'Rejected',
+							 'Accepted',
+							 'Shipped',
+							 'Shipping Cancelled',
+							 'Order Cancelled'
+							 ];
+			$shipping_gateway = [
+			                 '1'=>'Shipyaari',
+							 '2'=>'Shiprocket'
+							 ];
+			$payment_gateway = [
+			                 '1'=>'COD',
+							 '2'=>'Razorpay',
+							 '3'=>'Instamojo',
+							 ];
+			View::share('constant_order_status', $order_status);
+            View::share('shipping_gateway', $shipping_gateway);
+            View::share('payment_gateway', $payment_gateway);
+		});
+		
+    }
+}

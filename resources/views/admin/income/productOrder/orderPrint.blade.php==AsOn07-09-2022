@@ -1,0 +1,119 @@
+<html>
+	<head>
+		<meta charset='utf-8'>
+		<meta http-equiv='x-ua-compatible' content='ie=edge'>
+		<title>{{$account['title']}}</title>
+		<link rel='shortcut icon' href="https://{{$account->domain.'/'.$account['logo']}}">
+		<meta name='viewport' content='width=device-width, initial-scale=1'>
+	</head>
+	<body style='background-color: #e9ecef;padding: 0% 5%;' onload="window.print();">
+		<table width='100%'>
+			<tr>
+				<td>
+					<img src="https://{{$account->domain.'/'.$account['logo']}}" style='height: 120px;'>
+				</td>
+				<td style='text-align: right;'>
+					<h2>{{$account['title']}}</h2>
+					Email  : {{$account['email']}}
+					<br>
+					Mobile : {{$account['phone']}}
+					<br>
+					Address : {{$account['landmark']}}, {{$account['address']}}
+				</td>
+			</tr>
+
+			<tr style='background: #FFFF;'>
+				<td colspan='2' style='padding: 2% !important;border-top: 10px solid grey;'>
+					
+					@php
+						$todayDate = date('Y-m-d');
+						$grandTotal = 0;
+					@endphp
+					
+                    <table width='100%'>
+
+                        <thead>
+                            <tr>
+                                <th style="width:65%;text-align: left;">
+                                    <span style="display:block">{{ $orderList->name }}</span>
+                                    <span style="display:block">{{ $orderList->phone }}</span>
+                                    <span style="display:block">{{ $orderList->email }}</span>
+                                    <span style="display:block">
+                                        {{ $orderList->landmark }},
+                                        {{ $orderList->address }},
+                                        {{ $orderList->zipCode }}
+                                    </span>
+                                </th>
+								<th style="vertical-align: top;text-align: right;">
+                                    <span style="display:block">{{ $orderList->order_id }}</span>
+                                    <span style="display:block">{{ $orderList->transaction_id }}</span>
+                                    <span style="display:block">{{ date('d-m-Y h:m a', strtotime($todayDate)) }}</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        
+						<tbody>
+                            @foreach ( $orderList->products as $orderDetail)
+
+                                
+
+                                <tr>
+                                    <td colspan="2">
+                                        <table width='100%' style="padding: 10px;border-style: dashed;">
+                                            <tr>
+                                                <td colspan="3">
+                                                    <h2>{{ $orderDetail->title }}</h2>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="vertical-align: top;">
+                                                    <img src="{{ $orderDetail->thumbnail }}" style="height: 100px;">
+                                                </td>
+                                                <td style="vertical-align: top;">
+                                                    {{ $orderDetail->product->sku }}
+                                                </td>
+                                                <td style="vertical-align: top;text-align: right;">
+                                                    
+                                                    <br>
+                                                    Price  : Rs {{ $orderDetail->selling_price }}<br>
+                                                    Qty : {{ $orderDetail->qty }}<br>
+                                                    Sub Total : Rs. {{ $orderDetail->qty*$orderDetail->selling_price }}<br>
+                                                    Tax (<small>INC</small>) : Rs. {{ $orderDetail->product_tax*$orderDetail->qty }}<br>
+                                                    Shipping : Rs. {{ $orderDetail->shipping_charges }}
+                                                    <h3>
+                                                    Total: Rs. {{ $orderDetail->total }}
+                                                    </h3> 
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                    </td>
+                                </tr>
+
+                            @endforeach
+                        </tbody>
+
+                        <tfoot>
+                            <tr>
+                                <td colspan="2" style="text-align: right;">
+                                    <h1>Grand Total : Rs. {{ $orderList->grand_total }}</h1>
+                                </td>
+                            </tr>
+						</tfoot>
+						
+                    </table>
+					
+				</td>
+			</tr>
+
+			<tr>
+				<td colspan='2' style="text-align: center">
+					<h4>
+						© {{ now()->year }} <a href='{{$account['domain']}}' target='_blank'>{{$account['domain']}}</a>
+					</h4>
+				</td>
+			</tr>
+
+		</table>
+	</body>
+</html>

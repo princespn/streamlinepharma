@@ -1,0 +1,424 @@
+<?php
+include "include/db.php";
+session_start();
+if ($_REQUEST['type'] == 'google_login' || $_REQUEST['type'] == 'facebook_login') {
+    $check = mysqli_num_rows(mysqli_query($conn, "select * from users where social_id = '" . $_POST['id'] . "'"));
+    if ($check) {
+        mysqli_query($conn, "UPDATE `users` SET `name`='" . $_POST['name'] . "',`email`='" . $_POST['email'] . "',`profile`='" . $_POST['profile'] . "' WHERE social_id = '" . $_POST['id'] . "'");
+    } else {
+        mysqli_query($conn, "INSERT INTO `users`(`social_id`, `login_type`, `name`, `email`, `profile`) VALUES ('" . $_POST['id'] . "','" . $_POST['login_type'] . "','" . $_POST['name'] . "','" . $_POST['email'] . "','" . $_POST['profile'] . "')");
+    }
+    $data = mysqli_fetch_assoc(mysqli_query($conn, "select * from users where social_id = '" . $_POST['id'] . "'"));
+    $_SESSION['id'] = $data['id'];
+    $_SESSION['login_type'] = $_POST['login_type'];
+    $_SESSION['name'] = $_POST['name'];
+    mysqli_query($conn, "UPDATE `files` SET `store_prices`=Null,`store_prices_name`=Null,`store_prices_date`=Null,
+	`store_ads`=Null,`store_ads_name`=Null,`store_ads_date`=Null,
+	`weekly_ads`=Null,`weekly_ads_name`=Null,`weekly_ads_date`=Null,	`wholesale_price_books`=Null,`wholesale_price_books_name`=Null,`wholesale_price_books_date`=Null
+	WHERE user_id = '" . $_SESSION['id'] . "'");
+	mysqli_query($conn, "update users set analyzed = 0 where id = '" . $_SESSION['id'] . "'");
+}
+if ($_REQUEST['type'] == 'registration') {
+    $check = mysqli_num_rows(mysqli_query($conn, "select * from users where email = '" . $_POST['email'] . "'"));
+    if ($check) {
+        echo "Email already exists!";
+        exit;
+    } else {
+        mysqli_query($conn, "INSERT INTO `users`(`login_type`, `name`, `email`, `profile`,`password`) VALUES ('" . $_POST['login_type'] . "','" . $_POST['name'] . "','" . $_POST['email'] . "','" . $_POST['profile'] . "','" . $_POST['password'] . "')");
+        echo "User registered successfully. Please click OK to login from Login page";
+        exit;
+    }
+}
+if ($_REQUEST['type'] == 'login') {
+    $check = mysqli_num_rows(mysqli_query($conn, "select * from users where email = '" . $_POST['email'] . "' and password = '" . $_POST['password'] . "'"));
+    if ($check) {
+        $data = mysqli_fetch_assoc(mysqli_query($conn, "select * from users where email = '" . $_POST['email'] . "' and password = '" . $_POST['password'] . "'"));
+        $_SESSION['id'] = $data['id'];
+        $_SESSION['login_type'] = $data['login_type'];
+        $_SESSION['name'] = $data['name'];
+        mysqli_query($conn, "UPDATE `files` SET `store_prices`=Null,`store_prices_name`=Null,`store_prices_date`=Null,
+	`store_ads`=Null,`store_ads_name`=Null,`store_ads_date`=Null,
+	`weekly_ads`=Null,`weekly_ads_name`=Null,`weekly_ads_date`=Null,	`wholesale_price_books`=Null,`wholesale_price_books_name`=Null,`wholesale_price_books_date`=Null
+	WHERE user_id = '" . $_SESSION['id'] . "'");
+		mysqli_query($conn, "update users set analyzed = 0 where id = '" . $_SESSION['id'] . "'");
+        echo "Logged In!";
+        exit;
+    } else {
+        echo "Incorrect email or password.";
+        exit;
+    }
+}
+if (!isset($_SESSION['id'])) {
+    header("location:index.php");
+    exit;
+}
+if ($_REQUEST['type'] == 'ajax_file_upload') {
+    $analyze = false;
+    /**************extension**************/
+    $path = $_FILES[$_REQUEST['file_type']]['name'];
+    $ext = pathinfo($path, PATHINFO_EXTENSION);
+    /*************************************/
+    $new_name = $_REQUEST['file_type'] . '_' . $_SESSION['id'] . '_' . time() . '.' . $ext;
+    $dir = "uploads/";
+    $resultado = @move_uploaded_file($_FILES[$_REQUEST['file_type']]['tmp_name'], $dir . $new_name);
+    if ($resultado == 1) {
+        if ($_REQUEST['file_type'] == 'wholesale_price_books') {
+            require_once "PHPExcel/Classes/PHPExcel.php";
+            $tmpfname = 'uploads/' . $new_name;
+            $excelReader = PHPExcel_IOFactory::createReaderForFile($tmpfname);
+            $excelObj = $excelReader->load($tmpfname);
+            $worksheet = $excelObj->getSheetNames();
+            $worksheet = array_map('strtolower', $worksheet);
+            if (!in_array("price book", $worksheet)) {
+                echo json_encode(array('error' => true, 'message' => 'Upload error: The wholesale file must contain a "PRICE BOOK" worksheet.'));
+                exit;
+            }
+        }
+
+        $check_user = mysqli_num_rows(mysqli_query($conn, "select * from files where user_id = '" . $_SESSION['id'] . "'"));
+        if (!$check_user) {
+            mysqli_query($conn, "INSERT INTO `files`(`user_id`) VALUES ('" . $_SESSION['id'] . "')");
+        }
+        $date = date('Y-m-d H:i:s');
+        mysqli_query($conn, "UPDATE `files` SET `" . $_REQUEST['file_type'] . "` = '" . $_FILES[$_REQUEST['file_type']]['name'] . "' , `" . $_REQUEST['file_type'] . "_date` = '" . $date . "', `" . $_REQUEST['file_type'] . '_name' . "` = '" . $new_name . "' where user_id = '" . $_SESSION['id'] . "'");
+        $date = date('m-d-Y H:i:s', strtotime($date));
+        $file = mysqli_query($conn, "select * from files where user_id = '" . $_SESSION['id'] . "' 
+													and store_prices          is not Null
+													and store_ads             is not Null
+													and weekly_ads            is not Null
+													and exceptions            is not Null
+													and department_lists      is not Null
+													and wholesale_price_books is not Null
+													");
+        if (mysqli_num_rows($file)) {
+            $analyze = true;
+        }
+        echo json_encode(array('error' => false, 'message' => $date, 'analyze' => $analyze));
+        exit;
+    } else {
+        echo json_encode(array('error' => true, 'message' => 'Something Went Wrong'));
+        exit;
+    }
+}
+/*if($_REQUEST['type']=='ajax_file_upload'){
+	$analyze = false;
+		$path = $_FILES[$_REQUEST['file_type']]['name'];
+        $ext = pathinfo($path, PATHINFO_EXTENSION);
+	$new_name = $_REQUEST['file_type'].'_'.$_SESSION['id'].'_'.time().'.'.$ext;
+	$dir = "/home/admin/web/retailbazzar.com/public_html/public/test/uploads/";
+	if(@move_uploaded_file($_FILES[$_REQUEST['file_type']]['tmp_name'], $dir.$new_name)) {
+		if($_REQUEST['file_type']=='wholesale_price_books'){
+			require_once "PHPExcel/Classes/PHPExcel.php";
+			$tmpfname = 'uploads/'.$new_name;
+			$excelReader = PHPExcel_IOFactory::createReaderForFile($tmpfname);
+			$excelObj = $excelReader->load($tmpfname);
+			$worksheet = $excelObj->getSheetNames();
+			$worksheet = array_map('strtolower',$worksheet);
+			if (!in_array("price book", $worksheet)){
+				echo json_encode(array('error'=>true,'message'=>'Upload error: The wholesale file must contain a "PRICE BOOK" worksheet.'));
+				exit;
+			}
+		}
+		
+		
+		$check_user = mysqli_num_rows(mysqli_query($conn,"select * from files where user_id = '".$_SESSION['id']."'"));
+		if(!$check_user){
+			mysqli_query($conn,"INSERT INTO `files`(`user_id`) VALUES ('".$_SESSION['id']."')");
+		}
+		$date = date('Y-m-d H:i:s');
+		mysqli_query($conn,"UPDATE `files` SET `".$_REQUEST['file_type']."` = '".$_FILES[$_REQUEST['file_type']]['name']."' , `".$_REQUEST['file_type']."_date` = '".$date."', `".$_REQUEST['file_type'].'_name'."` = '".$new_name."' where user_id = '".$_SESSION['id']."'");
+		$date = date('d-m-Y H:i:s',strtotime($date));
+		$file =mysqli_query($conn,"select * from files where user_id = '".$_SESSION['id']."' 
+													and store_prices          is not Null
+													and store_ads             is not Null
+													and weekly_ads            is not Null
+													and exceptions            is not Null
+													and department_lists      is not Null
+													and wholesale_price_books is not Null
+													");
+		if(mysqli_num_rows($file)){
+			$analyze = true;
+		}
+		echo json_encode(array('error'=>false,'message'=>$date,'analyze'=>$analyze));
+		exit;
+	}else{
+		echo json_encode(array('error'=>true,'message'=>'Something Went Wrong'));
+		exit;
+	}
+}*/
+if ($_REQUEST['type'] == 'excel_upload') {
+
+    $dir = "uploads/";
+    $time = date('Y-m-d H:i:s');
+    move_uploaded_file($_FILES['store_prices']['tmp_name'], $dir . $_FILES['store_prices']['name']);
+    move_uploaded_file($_FILES['store_ads']['tmp_name'], $dir . $_FILES['store_ads']['name']);
+    move_uploaded_file($_FILES['weekly_ads']['tmp_name'], $dir . $_FILES['weekly_ads']['name']);
+    move_uploaded_file($_FILES['exceptions']['tmp_name'], $dir . $_FILES['exceptions']['name']);
+    move_uploaded_file($_FILES['department_lists']['tmp_name'], $dir . $_FILES['department_lists']['name']);
+    move_uploaded_file($_FILES['wholesale_price_books']['tmp_name'], $dir . $_FILES['wholesale_price_books']['name']);
+
+    mysqli_query($conn, "INSERT INTO `files`(`user_id`, `store_prices`, `store_ads`, `weekly_ads`, `exceptions`, `department_lists`, `wholesale_price_books`, `created_at`) VALUES ('" . $_SESSION['id'] . "','" . $_FILES['store_prices']['name'] . "','" . $_FILES['store_ads']['name'] . "','" . $_FILES['weekly_ads']['name'] . "','" . $_FILES['exceptions']['name'] . "','" . $_FILES['department_lists']['name'] . "','" . $_FILES['wholesale_price_books']['name'] . "','" . $time . "')");
+    $_SESSION['msg'] = 'Files Uploaded Successfully.';
+    header("location:dashboard.php");
+}
+if ($_REQUEST['type'] == 'download_file') {
+    $sql = "DROP TABLE IF EXISTS Mismatches" . $_SESSION['id'] . ", WholExc" . $_SESSION['id'] . ";
+
+UPDATE store_prices" . $_SESSION['id'] . " SET `Sell_Price`=REPLACE(`Sell_Price`,'$','');
+
+UPDATE wholesale_price_books" . $_SESSION['id'] . "
+SET `BASE GP%` = `BASE RETAIL`/`BASE RETAIL MULTIPLE`
+WHERE `BASE RETAIL` IS NOT NULL;
+
+CREATE TABLE `WholExc" . $_SESSION['id'] . "` AS SELECT wholesale_price_books" . $_SESSION['id'] . ".* FROM wholesale_price_books" . $_SESSION['id'] . " LEFT JOIN exceptions" . $_SESSION['id'] . " ON wholesale_price_books" . $_SESSION['id'] . ".UPC = exceptions" . $_SESSION['id'] . ".UPC WHERE exceptions" . $_SESSION['id'] . ".UPC IS NULL;
+
+DELETE FROM WholExc" . $_SESSION['id'] . "
+WHERE WholExc" . $_SESSION['id'] . ".UPC IN (
+SELECT UPC FROM `store_prices" . $_SESSION['id'] . "` WHERE (`WholExc" . $_SESSION['id'] . "`.`BASE GP%` = `store_prices" . $_SESSION['id'] . "`.`Sell_Price` AND `WholExc" . $_SESSION['id'] . "`.`UPC`=`store_prices" . $_SESSION['id'] . "`.`UPC`));
+
+CREATE TABLE `Mismatches" . $_SESSION['id'] . "` AS SELECT `store_prices" . $_SESSION['id'] . "`.`Dp` AS `Department`, `store_prices" . $_SESSION['id'] . "`.`UPC`, `store_prices" . $_SESSION['id'] . "`.`Description`, `store_prices" . $_SESSION['id'] . "`.`Quantity`, `store_prices" . $_SESSION['id'] . "`.`Sell_Price` AS `Store Price`, `store_ads" . $_SESSION['id'] . "`.`UPrice` AS `Store Ad`, NULL AS `Weekly Ad`, NULL AS `Exceptions`, NULL AS `Wholesale` FROM `store_prices" . $_SESSION['id'] . "` LEFT JOIN `store_ads" . $_SESSION['id'] . "` ON (`store_prices" . $_SESSION['id'] . "`.`UPC` = `store_ads" . $_SESSION['id'] . "`.`UPC`);
+		
+UPDATE Mismatches" . $_SESSION['id'] . " SET `Store Price`=REPLACE(`Store Price`,'$','');
+UPDATE Mismatches" . $_SESSION['id'] . " SET `Store Ad`=REPLACE(`Store Ad`,'$','');";
+
+    foreach (explode(';', $sql) as $query){
+        echo '<pre>'; print_r($query); echo '</pre>';
+        $StorePrices = mysqli_query($conn, $query);
+        sleep ( 1);
+    }
+
+    $WholExc = mysqli_query($conn, 'SELECT * FROM WholExc' . $_SESSION['id'] );
+    $Mismatches = mysqli_query($conn, 'SELECT * FROM Mismatches' . $_SESSION['id'] );
+    if (isset($_REQUEST['sub_type'])) {
+        echo json_encode(array('error' => false));
+        exit;
+    }
+    $array_WholExc = mysqli_fetch_all($WholExc, MYSQLI_ASSOC);
+    $array_Mismatches = mysqli_fetch_all($Mismatches, MYSQLI_ASSOC);
+
+    require_once "PHPExcel/Classes/PHPExcel.php";
+    $objPHPExcel = new PHPExcel();
+
+    //WholExc sheet
+    $objWorkSheet = $objPHPExcel->setActiveSheetIndex(0);
+    $objWorkSheet->setTitle("WholExc");
+    $objWorkSheet->fromArray($array_WholExc);
+    //Mismatches sheet
+    $objWorkSheet1 = $objPHPExcel->createSheet(1);
+    $objWorkSheet1 = $objPHPExcel->setActiveSheetIndex(1);
+    $objWorkSheet1->setTitle("Mismatches");
+    $objWorkSheet1->fromArray($array_Mismatches);
+
+    $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel2007');
+    ob_end_clean();
+
+    header('Content-type: application/vnd.ms-excel');
+    header('Content-Disposition: attachment; filename="' . $_REQUEST['file_type'] . ' - ' . date('m-d-Y His') . '.xlsx"'); //tell browser what's the file name
+    $objWriter->save('php://output');
+}
+if ($_REQUEST['type'] == 'analyze') {
+    $file = mysqli_query($conn, "select * from files where user_id = '" . $_SESSION['id'] . "' 
+												and store_prices          is not Null
+												and store_ads             is not Null
+												and weekly_ads            is not Null
+												and exceptions            is not Null
+												and department_lists      is not Null
+												and wholesale_price_books is not Null
+												");
+    if (!mysqli_num_rows($file)) {
+        echo "An error has occurred. Please upload all files then click Initialize the Analysis";
+        exit;
+    }
+    /***********checking if row found in table***********/
+    $check = mysqli_query($conn, "select * from analyzed_files where user_id = '" . $_SESSION['id'] . "'");
+    if (!mysqli_num_rows($check)) {
+        mysqli_query($conn, "INSERT INTO `analyzed_files`(`user_id`) VALUES ('" . $_SESSION['id'] . "')");
+    }
+    $file = mysqli_fetch_assoc(mysqli_query($conn, "select * from files where user_id = '" . $_SESSION['id'] . "'"));
+    require_once "PHPExcel/Classes/PHPExcel.php";
+    /**********************For store_prices**************************/
+    $inputFileName = "uploads/" . $file['store_prices_name'];
+    $objPHPExcel = PHPExcel_IOFactory::load($inputFileName);
+    $store_prices = $objPHPExcel->getActiveSheet()->toArray();
+    mysqli_query($conn, "DROP TABLE store_prices" . $_SESSION['id']);
+    $sql = "CREATE TABLE store_prices" . $_SESSION['id'] . " (
+				id INT(255) UNSIGNED AUTO_INCREMENT PRIMARY KEY,";
+    $end_key = '';
+    $row_query = '';
+    $table_col = array();
+    foreach ($store_prices[0] as $key => $row) {
+        if ($row == Null) {
+            break;
+        }
+        array_push($table_col, '`' . str_replace(' ', '_', $row) . '`');
+        $sql .= '`' . str_replace(' ', '_', $row) . '`' . "  VARCHAR(255) NOT NULL,";
+        $end_key = $key;
+    }
+    foreach ($store_prices as $key => $row) {
+        $tmp_row = array_slice($row, 0, ($end_key + 1));
+        array_walk($tmp_row, function (&$a) use ($conn) {
+            $a = mysqli_real_escape_string($conn, $a);
+        });
+        $row_query .= "('" . implode("','", $tmp_row) . "'),";
+    }
+    $sql = substr($sql, 0, -1) . "  ) ";
+    $insert_query = "INSERT INTO store_prices" . $_SESSION['id'] . " (" . implode(',', $table_col) . ") VALUES " . substr($row_query, 0, -1);
+    mysqli_query($conn, $sql);
+    mysqli_query($conn, $insert_query);
+    /**********************For store_ads_name**************************/
+    $inputFileName = "uploads/" . $file['store_ads_name'];
+    $objPHPExcel = PHPExcel_IOFactory::load($inputFileName);
+    $store_ads = $objPHPExcel->getActiveSheet()->toArray();
+    mysqli_query($conn, "DROP TABLE store_ads" . $_SESSION['id']);
+    $sql = "CREATE TABLE store_ads" . $_SESSION['id'] . " (
+				id INT(255) UNSIGNED AUTO_INCREMENT PRIMARY KEY,";
+    $end_key = '';
+    $row_query = '';
+    $table_col = array();
+    foreach ($store_ads[0] as $key => $row) {
+        if ($row == Null) {
+            break;
+        }
+        array_push($table_col, '`' . $row . '`');
+        $sql .= '`' . $row . '`' . "  VARCHAR(255) NOT NULL,";
+        $end_key = $key;
+    }
+    foreach ($store_ads as $key => $row) {
+        $tmp_row = array_slice($row, 0, ($end_key + 1));
+        array_walk($tmp_row, function (&$a) use ($conn) {
+            $a = mysqli_real_escape_string($conn, $a);
+        });
+        $row_query .= "('" . implode("','", $tmp_row) . "'),";
+    }
+    $sql = substr($sql, 0, -1) . "  ) ";
+    $insert_query = "INSERT INTO store_ads" . $_SESSION['id'] . " (" . implode(',', $table_col) . ") VALUES " . substr($row_query, 0, -1);
+    mysqli_query($conn, $sql);
+    mysqli_query($conn, $insert_query);
+    /**********************For weekly_ads_name**************************/
+    $inputFileName = "uploads/" . $file['weekly_ads_name'];
+    $objPHPExcel = PHPExcel_IOFactory::load($inputFileName);
+    $weekly_ads = $objPHPExcel->getActiveSheet()->toArray();
+    mysqli_query($conn, "DROP TABLE weekly_ads" . $_SESSION['id']);
+    $sql = "CREATE TABLE weekly_ads" . $_SESSION['id'] . " (
+				id INT(255) UNSIGNED AUTO_INCREMENT PRIMARY KEY,";
+    $end_key = '';
+    $row_query = '';
+    $table_col = array();
+    foreach ($weekly_ads[0] as $key => $row) {
+        if ($row == Null) {
+            break;
+        }
+        array_push($table_col, '`' . $row . '`');
+        $sql .= '`' . $row . '`' . "  VARCHAR(255) NOT NULL,";
+        $end_key = $key;
+    }
+    foreach ($weekly_ads as $key => $row) {
+        $tmp_row = array_slice($row, 0, ($end_key + 1));
+        array_walk($tmp_row, function (&$a) use ($conn) {
+            $a = mysqli_real_escape_string($conn, $a);
+        });
+        $row_query .= "('" . implode("','", $tmp_row) . "'),";
+    }
+    $sql = substr($sql, 0, -1) . "  ) ";
+    $insert_query = "INSERT INTO weekly_ads" . $_SESSION['id'] . " (" . implode(',', $table_col) . ") VALUES " . substr($row_query, 0, -1);
+    mysqli_query($conn, $sql);
+    mysqli_query($conn, $insert_query);
+    /**********************For exceptions_name**************************/
+    $inputFileName = "uploads/" . $file['exceptions_name'];
+    $objPHPExcel = PHPExcel_IOFactory::load($inputFileName);
+    $exceptions = $objPHPExcel->getActiveSheet()->toArray();
+    mysqli_query($conn, "DROP TABLE exceptions" . $_SESSION['id']);
+    $sql = "CREATE TABLE exceptions" . $_SESSION['id'] . " (
+				id INT(255) UNSIGNED AUTO_INCREMENT PRIMARY KEY,";
+    $end_key = '';
+    $row_query = '';
+    $table_col = array();
+    foreach ($exceptions[0] as $key => $row) {
+        if ($row == Null) {
+            break;
+        }
+        array_push($table_col, '`' . $row . '`');
+        $sql .= '`' . $row . '`' . "  VARCHAR(255) NOT NULL,";
+        $end_key = $key;
+    }
+    foreach ($exceptions as $key => $row) {
+        $tmp_row = array_slice($row, 0, ($end_key + 1));
+        array_walk($tmp_row, function (&$a) use ($conn) {
+            $a = mysqli_real_escape_string($conn, $a);
+        });
+        $row_query .= "('" . implode("','", $tmp_row) . "'),";
+    }
+    $sql = substr($sql, 0, -1) . "  ) ";
+    $insert_query = "INSERT INTO exceptions" . $_SESSION['id'] . " (" . implode(',', $table_col) . ") VALUES " . substr($row_query, 0, -1);
+    mysqli_query($conn, $sql);
+    mysqli_query($conn, $insert_query);
+    /**********************For department_lists_name**************************/
+    $inputFileName = "uploads/" . $file['department_lists_name'];
+    $objPHPExcel = PHPExcel_IOFactory::load($inputFileName);
+    $department_lists = $objPHPExcel->getActiveSheet()->toArray();
+    mysqli_query($conn, "DROP TABLE department_lists" . $_SESSION['id']);
+    $sql = "CREATE TABLE department_lists" . $_SESSION['id'] . " (
+				id INT(255) UNSIGNED AUTO_INCREMENT PRIMARY KEY,";
+    $end_key = '';
+    $row_query = '';
+    $table_col = array();
+    foreach ($department_lists[0] as $key => $row) {
+        if ($row == Null) {
+            break;
+        }
+        array_push($table_col, '`' . $row . '`');
+        $sql .= '`' . $row . '`' . "  VARCHAR(255) NOT NULL,";
+        $end_key = $key;
+    }
+    foreach ($department_lists as $key => $row) {
+        $tmp_row = array_slice($row, 0, ($end_key + 1));
+        array_walk($tmp_row, function (&$a) use ($conn) {
+            $a = mysqli_real_escape_string($conn, $a);
+        });
+        $row_query .= "('" . implode("','", $tmp_row) . "'),";
+    }
+    $sql = substr($sql, 0, -1) . "  ) ";
+    $insert_query = "INSERT INTO department_lists" . $_SESSION['id'] . " (" . implode(',', $table_col) . ") VALUES " . substr($row_query, 0, -1);
+    mysqli_query($conn, $sql);
+    mysqli_query($conn, $insert_query);
+    /**********************For wholesale_price_books_name**************************/
+    $inputFileName = "uploads/" . $file['wholesale_price_books_name'];
+    $sheetnm = 'PRICE BOOK';
+	$objPHPExcel = PHPExcel_IOFactory::load($inputFileName); 
+    $objPHPExcel->setActiveSheetIndexByName('PRICE BOOK');
+    $wholesale_price_books = $objPHPExcel->getActiveSheet()->toArray();
+    mysqli_query($conn, "DROP TABLE wholesale_price_books" . $_SESSION['id']);
+    $sql = "CREATE TABLE wholesale_price_books" . $_SESSION['id'] . " (
+				id INT(255) UNSIGNED AUTO_INCREMENT PRIMARY KEY,";
+    $end_key = '';
+    $row_query = '';
+    $table_col = array();
+    foreach ($wholesale_price_books[0] as $key => $row) {
+        if ($row == Null) {
+            break;
+        }
+        array_push($table_col, '`' . $row . '`');
+        $sql .= '`' . $row . '`' . "  VARCHAR(255) NOT NULL,";
+        $end_key = $key;
+    }
+
+    foreach ($wholesale_price_books as $key => $row) {
+        $tmp_row = array_slice($row, 0, ($end_key + 1));
+        array_walk($tmp_row, function (&$a) use ($conn) {
+            $a = mysqli_real_escape_string($conn, $a);
+        });
+        $row_query .= "('" . implode("','", $tmp_row) . "'),";
+    }
+    $sql = substr($sql, 0, -1) . "  ) ";
+    $insert_query = "INSERT INTO wholesale_price_books" . $_SESSION['id'] . " (" . implode(',', $table_col) . ") VALUES " . substr($row_query, 0, -1);
+    mysqli_query($conn, $sql);
+    mysqli_query($conn, $insert_query);
+    /*****************Updating Excel Data into Mysql**********************/
+    mysqli_query($conn, "update users set analyzed = 1 where id = '" . $_SESSION['id'] . "'");
+    $_SESSION['msg'] = 'Analysis complete.';
+    header("location:my_downloads.php");
+}
+if ($_REQUEST['type'] == 'contact_us_email') {
+    $_SESSION['msg'] = 'Email sent successfully.';
+    header("location:contact_us.php");
+}

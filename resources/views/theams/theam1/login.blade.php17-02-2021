@@ -1,0 +1,98 @@
+@extends('theams/theam1/layouts.app')
+
+@section('theme1Content')
+
+
+
+    <!-- Page Banner -->
+
+    <div class="page-banner container-fluid no-padding">
+
+        <!-- Container -->
+
+        <div class="container">
+
+            <div class="banner-content">
+
+                <h3>Login</h3>
+
+            </div>
+
+            <ol class="breadcrumb">
+
+                <li><a href="/" title="Home">Home</a></li>
+
+                <li class="active">Login</li>
+
+            </ol>
+
+        </div><!-- Container /- -->
+
+    </div><!-- Page Banner /- -->
+
+
+
+    <!-- Login Section -->
+
+    <div class="contact-us container-fluid no-padding">
+
+
+
+        <div class="col-md-6 col-sm-6 col-xs-12 col-md-offset-3 col-sm-offset-3">
+
+            <div class="form-detail">
+
+                <!-- Section Header -->
+
+                <div class="section-header">
+
+                    <h3>Welcome Back!</h3>
+                    @if($errors->any())
+                        <h4>{{$errors->first()}}</h4>
+                    @endif
+                   
+
+                </div><!-- Section Header /- -->
+
+                {!! Form::open(['route' => 'loginSubmit','method'=>'POST','id'=>'form','enctype'=>'multipart/form-data']) !!}
+                {{ csrf_field() }}
+
+                    <div class="col-md-12 col-sm-12 col-xs-12 form-group">
+                        <input type="number" name="phone" class="form-control" placeholder="Enter your phone number *" required/>
+                    </div>
+                    <div class="col-md-12 col-sm-12 col-xs-12 form-group">
+                        <input type="password" name="password" class="form-control" placeholder="Enter password *" required>
+                    </div>
+                    <div class="form-group col-md-12 col-sm-12 col-xs-12">
+                        <button title="Submit" type="submit"  name="post">Login</button>
+                    </div>
+
+                {!! Form::close() !!} 
+
+                <div class="col-md-12 col-sm-12 col-xs-12">
+
+                    <h5 class="entry-title">
+
+                        Dont have an account? <a href="{{route('register')}}"><span class="read-more">Register</span></a>
+
+                    </h5>
+
+                    <h5>
+
+                        Forgotten your password? <a class="active" href="{{route('forgotPassword')}}">Recover Password</a>
+
+                    </h5>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Login Section /- -->
+
+
+
+    @endsection

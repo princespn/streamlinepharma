@@ -1,0 +1,3117 @@
+<?php
+
+namespace App\Http\Controllers\WebSite;
+ 
+use App\Http\Controllers\Controller;
+use App\Models\About;
+use App\Models\ExtraService;
+use App\Models\Account;
+use App\Models\Category;
+use App\Models\GeneralInquiry;
+use App\Models\Label;
+use App\Models\Privacy;
+use App\Models\Product;
+use App\Models\ProductInventory;
+use App\Models\ProductPrice;
+use App\Models\ProductInquiry;
+use App\Models\ProductSearchKeyword;
+use App\Models\Register;
+use App\Models\RegisterAddress;
+use App\Models\Returning;
+use App\Models\Shipping;
+use App\Models\Slider;
+use App\Models\SocialMedia;
+use App\Models\Tag;
+use App\Models\Term;
+use App\Models\cartTemporary;
+use App\Models\Affiliate;
+use App\Models\order;
+use App\Models\orderDetail;
+use App\Models\orderOffer;
+use App\Models\changeAddress;
+use App\Models\OfferNormal;
+use App\Models\ProductOffer;
+use App\Mail\WelcomeMail;
+use App\Mail\ConfirmOrderMail;
+use App\Mail\LoginMail;
+use Hash;
+use App\Models\Msgnotify;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Session;
+use Mail;
+use Validator;
+use DB;
+class ThemeController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function index(Request $request)
+    {
+
+        // Note :- Get Domain Also in detail page 
+
+        $domainName = url('/');
+        $domainName = str_replace("https://", "", $domainName);
+        $domainName = str_replace("http://", "", $domainName);
+        $domainName = str_replace("www.", "", $domainName);
+        // $domainName = str_replace(".com", "", $domainName);
+        // $domainName = str_replace(".in", "", $domainName);
+        // $domainName = str_replace(".co.in", "", $domainName);
+        // $domainName = str_replace(".co.uk", "", $domainName);
+        // $domainName = str_replace(".net", "", $domainName);
+
+        $account = Account::where('domain', $domainName)->with(['currency'])->first();
+        if ($account) {
+
+            $sliderList = Slider::where('account_id', $account->id)->where('status', 1)->where('qc',1)->get();
+
+            $viewPath = 'theams/theam' . $account->theme . '/index';
+            Session::put('currentAccount', $account);
+
+            $account_id = $account->id;
+            $register_id = Session::getId();
+
+            $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+            
+            $categoryProductList = Category::where('account_id', $account->id)
+            ->where('level', 1)
+            ->where('status', 1)
+            ->orderBy('id', 'desc')
+            ->with(['productlevel1' => function ($query) {
+
+                $query->where('status', 1)->orderBy('id', 'desc')->with(['productvariations' => function ($query) {
+
+                    $query->where('qc', 4)
+                        ->where('status', 1)
+                        ->orderBy('id', 'desc')
+                        ->with(['inventory_price' => function ($query) {
+
+                    }]);
+                }]);
+            }])
+            ->get();
+            
+    
+            $extraServiceList = ExtraService ::where('account_id',$account_id)->get();
+
+            //dd($extraServiceList);
+            return view($viewPath, compact('account','cartList','sliderList','categoryProductList','extraServiceList'));
+
+        } else {
+
+            return view('theams/fail');
+        }
+
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function create()
+    {
+        //
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(Request $request)
+    {
+        //
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function show($id)
+    {
+        //
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function edit($id)
+    {
+        //
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, $id)
+    {
+        //
+    }
+
+    public function product(Request $request)
+    {
+        if ($request->has('leval')) {
+
+            $allQuery = $request->all();
+            $leval = $allQuery['leval'];
+            $ref_id = $allQuery['ref_id'];
+
+            $account = Session::get('currentAccount');
+            $viewPath = 'theams/theam' . $account->theme . '/product';
+
+            $account_id = $account->id;
+
+            $register_id = Session::getId();
+
+            $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+            $productLevelString = "productlevel$leval";
+
+            $categoryProductList = Category::where('account_id', $account->id)
+                ->where('level', $leval)
+                ->where('id', $ref_id)
+                ->with([$productLevelString => function ($query) {
+                    $query->with(['productvariations' => function ($query) {
+                        $query->where('qc', 4)
+                            ->where('isIdle', 1)
+                            ->orderBy('id', 'desc')
+                            ->with(['inventory_price' => function ($query) {
+
+                            }]);
+                    }]);
+                }])
+                ->first();
+            
+            if($categoryProductList) {
+                
+                $productList = array();
+                if ($leval == 1) {
+                    $productList = $categoryProductList->productlevel1;
+                } else if ($leval == 2) {
+                    $productList = $categoryProductList->productlevel2;
+                } else if ($leval == 3) {
+                    $productList = $categoryProductList->productlevel3;
+                }
+
+                $fillters = array();
+                $prices = array();
+
+                foreach ($productList as $keys => $product) {
+                    
+                    foreach ($product->productvariations as $key => $productvariation) {
+
+                        array_push($prices,$productvariation->inventory_price->sprice ?? 0);
+                        // variation0
+                        $label0 = Label::with('tag')->where('id', $productvariation->variation0)->first();
+                        
+                        if($label0 != null) {
+
+                            $tagId0 = $label0->tag_id;
+
+                            $foundedIndex0 = -1;
+                            foreach ($fillters as $key => $value) {
+                                
+                                if($value['tagId'] == $tagId0) {
+                                    $foundedIndex0 = $key;
+                                    break;
+                                }
+                            }
+                            
+                            if($foundedIndex0 != -1){
+
+                                $labelList = $fillters[$foundedIndex0]['labels'];
+                                $labelList->push($label0);
+                                $fillters[$foundedIndex0]['labels'] = $labelList->unique('id');
+
+                            } else {
+
+                                array_push($fillters,["labels" => collect([$label0]), "tagId"=>$tagId0 ,"tag"=>$label0->tag]);
+                            }
+                            
+                        }
+
+                        // variation1
+                        $label1 = Label::with('tag')->where('id', $productvariation->variation1)->first();
+                        
+                        if($label1 != null) {
+
+                            $tagId1 = $label1->tag_id;
+
+                            $foundedIndex1 = -1;
+                            foreach ($fillters as $key => $value) {
+                                
+                                if($value['tagId'] == $tagId1) {
+                                    $foundedIndex1 = $key;
+                                    break;
+                                }
+                            }
+                            
+                            if($foundedIndex1 != -1){
+
+                                $labelList1 = $fillters[$foundedIndex1]['labels'];
+                                $labelList1->push($label1);
+                                $fillters[$foundedIndex1]['labels'] = $labelList1->unique('id');
+
+                            } else {
+
+                                array_push($fillters,["labels" => collect([$label1]), "tagId"=>$tagId1 ,"tag"=>$label1->tag]);
+                            }
+                            
+                        }
+
+                        // variation2
+                        $label2 = Label::with('tag')->where('id', $productvariation->variation2)->first();
+                        
+                        if($label2 != null) {
+
+                            $tagId2 = $label2->tag_id;
+
+                            $foundedIndex2 = -1;
+                            foreach ($fillters as $key => $value) {
+                                
+                                if($value['tagId'] == $tagId2) {
+                                    $foundedIndex2 = $key;
+                                    break;
+                                }
+                            }
+                            
+                            if($foundedIndex2 != -1){
+
+                                $labelList2 = $fillters[$foundedIndex2]['labels'];
+                                $labelList2->push($label2);
+                                $fillters[$foundedIndex2]['labels'] = $labelList2->unique('id');
+
+                            } else {
+
+                                array_push($fillters,["labels" => collect([$label2]), "tagId"=>$tagId2 ,"tag"=>$label2->tag]);
+                            }
+                            
+                        }
+
+                        // variation3
+                        $label3 = Label::with('tag')->where('id', $productvariation->variation3)->first();
+                        
+                        if($label3 != null) {
+
+                            $tagId3 = $label3->tag_id;
+
+                            $foundedIndex3 = -1;
+                            foreach ($fillters as $key => $value) {
+                                
+                                if($value['tagId'] == $tagId3) {
+                                    $foundedIndex3 = $key;
+                                    break;
+                                }
+                            }
+                            
+                            if($foundedIndex3 != -1){
+
+                                $labelList3 = $fillters[$foundedIndex3]['labels'];
+                                $labelList3->push($label3);
+                                $fillters[$foundedIndex3]['labels'] = $labelList3->unique('id');
+
+                            } else {
+
+                                array_push($fillters,["labels" => collect([$label3]), "tagId"=>$tagId3 ,"tag"=>$label3->tag]);
+                            }
+                            
+                        }
+
+                        // variation4
+                        $label4 = Label::with('tag')->where('id', $productvariation->variation4)->first();
+                        
+                        if($label4 != null) {
+
+                            $tagId4 = $label4->tag_id;
+
+                            $foundedIndex4 = -1;
+                            foreach ($fillters as $key => $value) {
+                                
+                                if($value['tagId'] == $tagId4) {
+                                    $foundedIndex4 = $key;
+                                    break;
+                                }
+                            }
+                            
+                            if($foundedIndex4 != -1){
+
+                                $labelList4 = $fillters[$foundedIndex4]['labels'];
+                                $labelList4->push($label4);
+                                $fillters[$foundedIndex4]['labels'] = $labelList4->unique('id');
+
+                            } else {
+
+                                array_push($fillters,["labels" => collect([$label4]), "tagId"=>$tagId4 ,"tag"=>$label4->tag]);
+                            }
+                            
+                        }
+
+                    }
+                }
+
+                if (sizeof($prices) > 0)
+                {
+                    $minPrice = min($prices);
+                    $maxPrice = max($prices);
+
+                } else {
+                    $minPrice = 0;
+                    $maxPrice = 0;
+                }
+
+                return view($viewPath, compact('account','cartList','productList','leval','ref_id','fillters','minPrice','maxPrice'));
+                
+            } else {
+
+                return redirect('/');
+            }
+
+        } else {
+
+            return redirect('/');
+        }
+
+    }
+    
+    public function filterInventory(Request $request)
+    {
+        $allQuery = $request->all();
+        $leval = $allQuery['leval'];
+        $ref_id = $allQuery['ref_id'];
+        $minmumAmt = $allQuery['minmumAmt'];
+        $maximumAmt = $allQuery['maximumAmt'];
+        //dd($allQuery);
+
+        $variation0 = $allQuery['variation0'] ?? NULL;
+        $variation1 = $allQuery['variation1'] ?? NULL;
+        $variation2 = $allQuery['variation2'] ?? NULL;
+        $variation3 = $allQuery['variation3'] ?? NULL;
+        $variation4 = $allQuery['variation4'] ?? NULL;
+
+        //dd($allQuery);
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/product';
+
+        $account_id = $account->id;
+
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+        $productLevelString = "productlevel$leval";
+
+        if($leval!=0) {
+
+            $categoryProductList = Category::where('account_id', $account->id)
+            ->where('level', $leval)
+            ->where('id', $ref_id)
+            ->with([$productLevelString => function ($query) use ($variation0,$variation1,$variation2,$variation3,$variation4,$minmumAmt,$maximumAmt) {
+                $query->with(['productvariations' => function ($query) use ($variation0,$variation1,$variation2,$variation3,$variation4,$minmumAmt,$maximumAmt) {
+                    $query->where('qc', 4)
+                        ->where('isIdle', 1)
+                        ->orderBy('id', 'desc')
+                        ->with(['inventory_price' => function ($query) use($minmumAmt,$maximumAmt) {
+                            $query->whereBetween('sprice', [$minmumAmt, $maximumAmt]);
+                        }]);
+
+                        if($variation0 != null){
+                            $query->whereIn('variation0',$variation0);
+                        }
+                        if($variation1 != null){
+                            $query->whereIn('variation1',$variation1);
+                        }
+                        if($variation2 != null){
+                            $query->whereIn('variation2',$variation2);
+                        }
+                        if($variation3 != null){
+                            $query->whereIn('variation3',$variation3);
+                        }
+                        if($variation4 != null){
+                            $query->whereIn('variation4',$variation4);
+                        }
+                }]);
+            }])
+            ->first();
+
+        } else {
+            
+            $categoryProductList = Category::where('account_id', $account->id)
+            ->with([$productLevelString => function ($query) use ($variation0,$variation1,$variation2,$variation3,$variation4,$minmumAmt,$maximumAmt) {
+                $query->with(['productvariations' => function ($query) use ($variation0,$variation1,$variation2,$variation3,$variation4,$minmumAmt,$maximumAmt) {
+                    $query->where('qc', 4)
+                        ->where('isIdle', 1)
+                        ->orderBy('id', 'desc')
+                        ->with(['inventory_price' => function ($query) use($minmumAmt,$maximumAmt)  {
+                            $query->whereBetween('sprice', [$minmumAmt, $maximumAmt]);
+                        }]);
+
+                        if($variation0 != null){
+                            $query->whereIn('variation0',$variation0);
+                        }
+                        if($variation1 != null){
+                            $query->whereIn('variation1',$variation1);
+                        }
+                        if($variation2 != null){
+                            $query->whereIn('variation2',$variation2);
+                        }
+                        if($variation3 != null){
+                            $query->whereIn('variation3',$variation3);
+                        }
+                        if($variation4 != null){
+                            $query->whereIn('variation4',$variation4);
+                        }
+                }]);
+            }])
+            ->first();
+        }
+        
+        //dd($categoryProductList);
+        
+        if($categoryProductList) {
+            
+            $productList = array();
+            if ($leval == 0) {
+                $productList = $categoryProductList->productlevel0;
+            } else if ($leval == 1) {
+                $productList = $categoryProductList->productlevel1;
+            } else if ($leval == 2) {
+                $productList = $categoryProductList->productlevel2;
+            } else if ($leval == 3) {
+                $productList = $categoryProductList->productlevel3;
+            }
+
+            $fillters = array();
+            $prices = array();
+
+            foreach ($productList as $keys => $product) {
+                
+                foreach ($product->productvariations as $key => $productvariation) {
+
+                    array_push($prices,$productvariation->inventory_price->sprice ?? 0);
+                    // variation0
+                    $label0 = Label::with('tag')->where('id', $productvariation->variation0)->first();
+                    
+                    if($label0 != null) {
+
+                        $tagId0 = $label0->tag_id;
+
+                        $foundedIndex0 = -1;
+                        foreach ($fillters as $key => $value) {
+                            
+                            if($value['tagId'] == $tagId0) {
+                                $foundedIndex0 = $key;
+                                break;
+                            }
+                        }
+                        
+                        if($foundedIndex0 != -1){
+
+                            $labelList = $fillters[$foundedIndex0]['labels'];
+                            $labelList->push($label0);
+                            $fillters[$foundedIndex0]['labels'] = $labelList->unique('id');
+
+                        } else {
+
+                            array_push($fillters,["labels" => collect([$label0]), "tagId"=>$tagId0 ,"tag"=>$label0->tag]);
+                        }
+                        
+                    }
+
+                    // variation1
+                    $label1 = Label::with('tag')->where('id', $productvariation->variation1)->first();
+                    
+                    if($label1 != null) {
+
+                        $tagId1 = $label1->tag_id;
+
+                        $foundedIndex1 = -1;
+                        foreach ($fillters as $key => $value) {
+                            
+                            if($value['tagId'] == $tagId1) {
+                                $foundedIndex1 = $key;
+                                break;
+                            }
+                        }
+                        
+                        if($foundedIndex1 != -1){
+
+                            $labelList1 = $fillters[$foundedIndex1]['labels'];
+                            $labelList1->push($label1);
+                            $fillters[$foundedIndex1]['labels'] = $labelList1->unique('id');
+
+                        } else {
+
+                            array_push($fillters,["labels" => collect([$label1]), "tagId"=>$tagId1 ,"tag"=>$label1->tag]);
+                        }
+                        
+                    }
+
+                    // variation2
+                    $label2 = Label::with('tag')->where('id', $productvariation->variation2)->first();
+                    
+                    if($label2 != null) {
+
+                        $tagId2 = $label2->tag_id;
+
+                        $foundedIndex2 = -1;
+                        foreach ($fillters as $key => $value) {
+                            
+                            if($value['tagId'] == $tagId2) {
+                                $foundedIndex2 = $key;
+                                break;
+                            }
+                        }
+                        
+                        if($foundedIndex2 != -1){
+
+                            $labelList2 = $fillters[$foundedIndex2]['labels'];
+                            $labelList2->push($label2);
+                            $fillters[$foundedIndex2]['labels'] = $labelList2->unique('id');
+
+                        } else {
+
+                            array_push($fillters,["labels" => collect([$label2]), "tagId"=>$tagId2 ,"tag"=>$label2->tag]);
+                        }
+                        
+                    }
+
+                    // variation3
+                    $label3 = Label::with('tag')->where('id', $productvariation->variation3)->first();
+                    
+                    if($label3 != null) {
+
+                        $tagId3 = $label3->tag_id;
+
+                        $foundedIndex3 = -1;
+                        foreach ($fillters as $key => $value) {
+                            
+                            if($value['tagId'] == $tagId3) {
+                                $foundedIndex3 = $key;
+                                break;
+                            }
+                        }
+                        
+                        if($foundedIndex3 != -1){
+
+                            $labelList3 = $fillters[$foundedIndex3]['labels'];
+                            $labelList3->push($label3);
+                            $fillters[$foundedIndex3]['labels'] = $labelList3->unique('id');
+
+                        } else {
+
+                            array_push($fillters,["labels" => collect([$label3]), "tagId"=>$tagId3 ,"tag"=>$label3->tag]);
+                        }
+                        
+                    }
+
+                    // variation4
+                    $label4 = Label::with('tag')->where('id', $productvariation->variation4)->first();
+                    
+                    if($label4 != null) {
+
+                        $tagId4 = $label4->tag_id;
+
+                        $foundedIndex4 = -1;
+                        foreach ($fillters as $key => $value) {
+                            
+                            if($value['tagId'] == $tagId4) {
+                                $foundedIndex4 = $key;
+                                break;
+                            }
+                        }
+                        
+                        if($foundedIndex4 != -1){
+
+                            $labelList4 = $fillters[$foundedIndex4]['labels'];
+                            $labelList4->push($label4);
+                            $fillters[$foundedIndex4]['labels'] = $labelList4->unique('id');
+
+                        } else {
+
+                            array_push($fillters,["labels" => collect([$label4]), "tagId"=>$tagId4 ,"tag"=>$label4->tag]);
+                        }
+                        
+                    }
+
+                }
+            }
+                        
+            if (sizeof($prices) > 0)
+            {
+                $minPrice = min($prices);
+                $maxPrice = max($prices);
+
+            } else {
+                $minPrice = 0;
+                $maxPrice = 0;
+            }
+            
+            //dd($productList);
+            return view($viewPath, compact('account','cartList','productList','leval','ref_id','fillters','minPrice','maxPrice'));
+            
+        } else {
+
+            return redirect('/');
+        }
+
+       
+    }
+
+    public function search(Request $request)
+    {
+        $input = $request->all();
+        $search = $input['search'];
+        
+        $leval = 0;
+        $ref_id = 0;
+        
+        if ($search) {
+
+            $account = Session::get('currentAccount');
+            $viewPath = 'theams/theam' . $account->theme . '/product';
+
+            $account_id = $account->id;
+            $register_id = Session::getId();
+
+            $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+            $list = ProductSearchKeyword::with(['searchProduct'=> function ($query) use($account_id) {
+                $query->where('account_id', $account_id)->with(['productvariations' => function ($query) {
+
+                    $query->where('qc', 4)
+                        ->where('isIdle', 1)
+                        ->with(['inventory_price' => function ($query) {
+
+                        }]);
+                }]);                        
+
+            }])
+            ->where('keyword', 'like', '%' . $search . '%')
+            ->orderBy('product_id', 'asc')
+            ->get();
+
+            $productList = array();
+            foreach ($list as $key => $value) {
+                
+                if($value->searchProduct) {
+                    
+                    array_push($productList,$value->searchProduct);
+                }
+            }
+
+            $fillters = array();
+            $prices = array();
+
+            foreach ($productList as $keys => $product) {
+                
+                foreach ($product->productvariations as $key => $productvariation) {
+
+                    array_push($prices,$productvariation->inventory_price->sprice);
+                    // variation0
+                    $label0 = Label::with('tag')->where('id', $productvariation->variation0)->first();
+                    
+                    if($label0 != null) {
+
+                        $tagId0 = $label0->tag_id;
+
+                        $foundedIndex0 = -1;
+                        foreach ($fillters as $key => $value) {
+                            
+                            if($value['tagId'] == $tagId0) {
+                                $foundedIndex0 = $key;
+                                break;
+                            }
+                        }
+                        
+                        if($foundedIndex0 != -1){
+
+                            $labelList = $fillters[$foundedIndex0]['labels'];
+                            $labelList->push($label0);
+                            $fillters[$foundedIndex0]['labels'] = $labelList->unique('id');
+
+                        } else {
+
+                            array_push($fillters,["labels" => collect([$label0]), "tagId"=>$tagId0 ,"tag"=>$label0->tag]);
+                        }
+                        
+                    }
+
+                    // variation1
+                    $label1 = Label::with('tag')->where('id', $productvariation->variation1)->first();
+                    
+                    if($label1 != null) {
+
+                        $tagId1 = $label1->tag_id;
+
+                        $foundedIndex1 = -1;
+                        foreach ($fillters as $key => $value) {
+                            
+                            if($value['tagId'] == $tagId1) {
+                                $foundedIndex1 = $key;
+                                break;
+                            }
+                        }
+                        
+                        if($foundedIndex1 != -1){
+
+                            $labelList1 = $fillters[$foundedIndex1]['labels'];
+                            $labelList1->push($label1);
+                            $fillters[$foundedIndex1]['labels'] = $labelList1->unique('id');
+
+                        } else {
+
+                            array_push($fillters,["labels" => collect([$label1]), "tagId"=>$tagId1 ,"tag"=>$label1->tag]);
+                        }
+                        
+                    }
+
+                    // variation2
+                    $label2 = Label::with('tag')->where('id', $productvariation->variation2)->first();
+                    
+                    if($label2 != null) {
+
+                        $tagId2 = $label2->tag_id;
+
+                        $foundedIndex2 = -1;
+                        foreach ($fillters as $key => $value) {
+                            
+                            if($value['tagId'] == $tagId2) {
+                                $foundedIndex2 = $key;
+                                break;
+                            }
+                        }
+                        
+                        if($foundedIndex2 != -1){
+
+                            $labelList2 = $fillters[$foundedIndex2]['labels'];
+                            $labelList2->push($label2);
+                            $fillters[$foundedIndex2]['labels'] = $labelList2->unique('id');
+
+                        } else {
+
+                            array_push($fillters,["labels" => collect([$label2]), "tagId"=>$tagId2 ,"tag"=>$label2->tag]);
+                        }
+                        
+                    }
+
+                    // variation3
+                    $label3 = Label::with('tag')->where('id', $productvariation->variation3)->first();
+                    
+                    if($label3 != null) {
+
+                        $tagId3 = $label3->tag_id;
+
+                        $foundedIndex3 = -1;
+                        foreach ($fillters as $key => $value) {
+                            
+                            if($value['tagId'] == $tagId3) {
+                                $foundedIndex3 = $key;
+                                break;
+                            }
+                        }
+                        
+                        if($foundedIndex3 != -1){
+
+                            $labelList3 = $fillters[$foundedIndex3]['labels'];
+                            $labelList3->push($label3);
+                            $fillters[$foundedIndex3]['labels'] = $labelList3->unique('id');
+
+                        } else {
+
+                            array_push($fillters,["labels" => collect([$label3]), "tagId"=>$tagId3 ,"tag"=>$label3->tag]);
+                        }
+                        
+                    }
+
+                    // variation4
+                    $label4 = Label::with('tag')->where('id', $productvariation->variation4)->first();
+                    
+                    if($label4 != null) {
+
+                        $tagId4 = $label4->tag_id;
+
+                        $foundedIndex4 = -1;
+                        foreach ($fillters as $key => $value) {
+                            
+                            if($value['tagId'] == $tagId4) {
+                                $foundedIndex4 = $key;
+                                break;
+                            }
+                        }
+                        
+                        if($foundedIndex4 != -1){
+
+                            $labelList4 = $fillters[$foundedIndex4]['labels'];
+                            $labelList4->push($label4);
+                            $fillters[$foundedIndex4]['labels'] = $labelList4->unique('id');
+
+                        } else {
+
+                            array_push($fillters,["labels" => collect([$label4]), "tagId"=>$tagId4 ,"tag"=>$label4->tag]);
+                        }
+                        
+                    }
+
+                }
+            }
+            
+            if (sizeof($prices) > 0)
+            {
+                $minPrice = min($prices);
+                $maxPrice = max($prices);
+
+            } else {
+                $minPrice = 0;
+                $maxPrice = 0;
+            }
+                
+            return view($viewPath, compact('account','cartList','productList','leval','ref_id','fillters','minPrice','maxPrice'));
+
+        } else {
+
+            return redirect('/');
+        }
+
+    }
+
+    public function detail(Request $request)
+    {
+        $account = Session::get('currentAccount');
+        //dd($account);
+
+        if($account){
+
+            $account= $account;
+
+        } else {
+            $domainName = url('/');
+            $domainName = str_replace("https://", "", $domainName);
+            $domainName = str_replace("http://", "", $domainName);
+            $domainName = str_replace("www.", "", $domainName);
+
+            $account = Account::where('domain', $domainName)->with(['currency'])->first();
+        }
+        //dd($account);
+
+        $viewPath = 'theams/theam' . $account->theme . '/detail';
+
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+        $allQuery = $request->all();
+        $inventoryId = $allQuery['id'];
+        $affiliateCode = $allQuery['aff'] ?? '';
+
+        if($affiliateCode) {
+
+            $affiliateDetail = Affiliate::where('code', $affiliateCode)->first();
+            if($affiliateDetail) {
+                
+                $affiliateId = $affiliateDetail->id;
+            } else {
+
+                $affiliateId = '';
+            }
+
+        } else {
+
+            $affiliateId = '';
+        }
+
+        $inventoryData = ProductInventory::where('id', $inventoryId)
+            ->with(['inventory_price', 'inventory_shipping', 'inventory_warranty','product_packaging' => function ($query) {}])
+            ->first();
+        $relatedProduct = ProductInventory::where('product_id', $inventoryData->product_id)->where('id', '!=', $inventoryId)->get();
+        
+        $productData = Product::with([
+
+            'tax_detail','attributesOption' => function ($query) {
+                $query->where('type', 3)->with(['label' => function ($query) {
+                    $query->with('tag');
+                }]);
+            },
+        ])
+        ->where('id', $inventoryData->product_id)
+        ->first();
+
+        if (isset($productData->attributesOption)) {
+
+            $arrayOptions = array();
+
+            foreach ($productData->attributesOption as $key => $attributesOption) {
+
+                $tagObject = $attributesOption->label->tag;
+                if (array_key_exists($attributesOption->label->tag_id, $arrayOptions)) {
+
+                    $optionsIds = $tagObject->optionsIds;
+                    array_push($optionsIds, $attributesOption->label);
+                    $tagObject->optionsIds = $optionsIds;
+                    $arrayOptions[$attributesOption->label->tag_id] = $tagObject;
+                } else {
+
+                    $tagObject->optionsIds = array($attributesOption->label);
+                    $arrayOptions[$attributesOption->label->tag_id] = $tagObject;
+                }
+
+            }
+
+            $productData->optionList = $arrayOptions;
+        }
+		$colorOption = ProductInventory::where('product_id', $inventoryData->product_id)->get();
+        //dd($productData);
+
+        return view($viewPath, compact('account','cartList','inventoryData', 'relatedProduct', 'productData','affiliateId','colorOption'));
+    }
+
+    public function optionFilter(Request $request)
+    {
+        $input = $request->all();
+        $inventoryData = ProductInventory::where('product_id',$input['productId'])->with(['inventory_price', 'inventory_shipping', 'inventory_warranty' => function ($query) {}]);
+
+        foreach ($input['data'] as $key => $value) {
+
+            $inventoryData->where($value['key'], $value['value']);
+        }
+
+        $inventoryData = $inventoryData->first();
+
+        return response()->json($inventoryData, 200);
+
+    }
+
+    public function login()
+    {
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/login';
+
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+        return view($viewPath, compact('account','cartList'));
+    }
+    public function check_mobile(Request $request){
+		$account = Session::get('currentAccount');
+		$account_id = $account->id; 
+		$register = Register::where('account_id', $account_id)->where('phone', $request->mobile)->where('status', 1)->first();
+		if($register){
+			return array('error'=>false,'name'=>$register->name);
+		}else{
+			        $found = Msgnotify::where('account_id', $account_id)->where('msg_type', '4')->first();
+					
+					
+			        $OTP = rand(1000,9999);
+					$sign_up_message = $found->messages;
+					$sign_up_message = str_replace('[OTP]',$OTP,$sign_up_message);
+				    $message = urlencode($sign_up_message);
+                     Session::put('otp', $OTP);
+                //$url = "http://nimbusit.co.in/api/swsendSingle.asp?username=t1thekheewa&password=100719238&sender=KHEEWA&sendto=$phone&message=$message";
+                //$url = "http://nimbusit.co.in/api/swsendSingle.asp?username=$account->SMSUserName&password=$account->SMSUserPassword&sender=$account->SMSUserSenderId&sendto=$phone&message=$message";
+                $account = Session::get('currentAccount');
+                $replace = str_replace('setUsername', $account->SMSUserName, $account->SMSApi);
+                $replace1 = str_replace('setPassword', $account->SMSUserPassword, $replace);
+                $replace2 = str_replace('setSenderId', $account->SMSUserSenderId, $replace1);
+                $replace3 = str_replace('setPhone', $request->mobile, $replace2);
+                $replace4 = str_replace('setMessage', $message, $replace3);
+                $replace5 = str_replace('setTEMPLATEID', $found->template_id,$replace4);
+
+                $url = $replace5;
+                //dd($url);
+                $post = curl_init();
+                curl_setopt($post, CURLOPT_URL, $url);
+                curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+                curl_setopt($post, CURLOPT_CUSTOMREQUEST, 'GET');
+                $response = curl_exec($post);
+                curl_close($post);
+                $result = json_decode($response, true);
+                
+                //dd($response);
+			return array('error'=>true,'message'=>'User Not found '.$OTP);
+		}
+	}
+	public function ajaxSignUp(Request $request){
+	   if($request->new_otp==Session::get('otp')){ 
+	            $account = Session::get('currentAccount');
+	            $input    = $request->all();
+                $password = bcrypt($input['set_password']);
+				$phone    = $input['pre_phone'];
+				$register = Register::create(['account_id' => $account->id, 'name' => '', 'phone' => $phone, 'email' => '', 'password' => $password]);
+				if ($register) {
+                    
+                    RegisterAddress::create(['register_id' => $register->id, 'name' => '', 'phone' => $phone, 'email' => '', 'password' => $password, 'landmark' => '', 'address' => '', 'zipCode' => '']);
+
+                    $logo = $account->domain.'/'.$account->logo;
+                    //Mail::to($input['email'])->send(new WelcomeMail(['input'=>$input, 'account' => $account, 'logo' => $logo]));
+                    
+                    Session::put('isLoggedIn', true);
+                    Session::put('register', $register);
+                    Session::save();
+                    return array('error'=>false,'message'=>'Registered.');
+
+                } else {
+                    return array('error'=>true,'message'=>'Something went wrong.');
+                }
+	   }else{
+		   return array('error'=>true,'message'=>'Your OTP didnot match.');
+	   }	
+	}
+	public function checkLoginDetails(Request $request){
+		   $account = Session::get('currentAccount');
+           $account_id = $account->id;
+        
+           $input = $request->all();
+		   $phone = $input['phone'];
+           $password = $input['password'];
+		   $register = Register::where('account_id', $account_id)->where('phone', $phone)->where('status', 1)->first();
+           
+		  $otp = (isset($input['login_otp'])? $input['login_otp']:'');
+		  $isOtpLogin=false;
+			if($otp && Session::get('loginOtp') && Session::get('loginOtp')==$otp){
+				$isOtpLogin=true;
+			}
+		
+            if ($register) {
+                
+                if (!$isOtpLogin && !Hash::check($password, $register->password)) {
+                    return array('error'=>true,'message'=>'Enter correct password');
+					exit;
+                } else {
+
+                    Session::put('isLoggedIn', true);
+                    Session::put('register', $register);
+                    Session::save();
+
+                    $email = $register['email'];
+                    if($email)
+                    {
+                        $logo = $account->domain.'/'.$account->logo;
+                        Mail::to($email)->send(new LoginMail(['register'=>$register, 'account' => $account, 'logo' => $logo]));
+                    }
+
+                    return array('error'=>false,'message'=>'LoggedIn');
+					exit;
+                }
+
+            } else {
+				    
+                    return array('error'=>true,'message'=>'Mobile is Not Registered.');
+					exit;
+            }
+	}
+    public function loginSubmit(Request $request)
+    {
+        $account = Session::get('currentAccount');
+        $account_id = $account->id;
+        
+        $input = $request->all();
+
+        $rules = [
+            'phone' => 'required',
+             'password' => 'required_if:login_otp,"=",null',
+            'login_otp' => 'required_if:password,"=",null'
+        ];
+
+        $validation = Validator::make($input, $rules);
+        if ($validation->passes()) {
+
+            $phone = $input['phone'];
+            $password = $input['password'];
+			$otp = $input['login_otp'];
+            $isOtpLogin=false;
+            if($otp && Session::get('loginOtp')==$otp){
+                $isOtpLogin=true;
+            }
+
+            unset($input['_token']);
+            unset($input['phone']);
+            unset($input['password']);
+           
+            $register = Register::where('account_id', $account_id)->where('phone', $phone)->where('status', 1)->first();
+            if($isOtpLogin && $register){
+                Session::put('isLoggedIn', true);
+                Session::put('register', $register);
+                Session::save();
+
+                $email = $register['email'];
+                if ($email) {
+                    $logo = $account->domain . '/' . $account->logo;
+                    Mail::to($email)->send(new LoginMail(['register' => $register, 'account' => $account, 'logo' => $logo]));
+                }
+                return redirect('/');
+            }else if ($register) {
+                
+                if (!Hash::check($password, $register->password)) {
+
+                    return back()->withErrors(['Enter correct password']);
+
+                } else {
+
+                    Session::put('isLoggedIn', true);
+                    Session::put('register', $register);
+                    Session::save();
+
+                    $email = $register['email'];
+                    if($email)
+                    {
+                        $logo = $account->domain.'/'.$account->logo;
+                        Mail::to($email)->send(new LoginMail(['register'=>$register, 'account' => $account, 'logo' => $logo]));
+                    }
+
+                    return redirect('/');
+                }
+
+            } else {
+
+                return back()->withErrors(['You are not registered with this contact number.']);
+            }
+
+        } else {
+
+            $errors = $validation->errors();
+            return back()->withErrors($errors);
+        }
+    }
+
+    public function logOutClick(Request $request)
+    {
+
+        $request->session()->flush();
+        return redirect('/');
+
+    }
+
+    public function register()
+    {
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/register';
+        
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+        return view($viewPath, compact('account','cartList'));
+    }
+
+    public function registerSubmit(Request $request)
+    {
+        $input = $request->all();
+
+        $rules = [
+            'name' => 'required',
+            'phone' => 'required|min:10|max:10',
+            'email' => 'required',
+            'password' => 'required',
+            'landmark' => 'required',
+            'address' => 'required',
+            'zipCode' => 'required',
+        ];
+
+        $validation = Validator::make($input, $rules);
+        if ($validation->passes()) {
+
+            $account = Session::get('currentAccount');
+            $phone = $input['phone'];
+
+            $registerCheck = Register::where('account_id', $account->id)->where('phone', $phone)->first();
+            if($registerCheck) {
+
+                return back()->withErrors(['This number is already registered.']);
+
+            } else {
+
+                $name = $input['name'];            
+                $email = $input['email'];
+                $password = bcrypt($input['password']);
+                $landmark = $input['landmark'];
+                $address = $input['address'];
+                $zipCode = $input['zipCode'];
+
+                // unset($input['_token']);
+                // unset($input['name']);
+                // unset($input['phone']);
+                // unset($input['email']);
+                // unset($input['password']);
+                // unset($input['landmark']);
+                // unset($input['address']);
+                // unset($input['zipCode']);
+
+                $register = Register::create(['account_id' => $account->id, 'name' => $name, 'phone' => $phone, 'email' => $email, 'password' => $password]);
+                if ($register) {
+                    
+                    RegisterAddress::create(['register_id' => $register->id, 'name' => $name, 'phone' => $phone, 'email' => $email, 'password' => $password, 'landmark' => $landmark, 'address' => $address, 'zipCode' => $zipCode]);
+
+                    $logo = $account->domain.'/'.$account->logo;
+                    Mail::to($input['email'])->send(new WelcomeMail(['input'=>$input, 'account' => $account, 'logo' => $logo]));
+                    
+                    Session::put('isLoggedIn', true);
+                    Session::put('register', $register);
+                    Session::save();
+                    return redirect('/');
+
+                } else {
+
+                    return back()->withErrors(['Something went wrong']);
+                }
+            }
+
+        } else {
+
+            $errors = $validation->errors();
+            //dd($errors);
+            return back()->withErrors($errors);
+        }
+    }
+
+    public function forgotPassword()
+    {
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/forgotPassword';
+
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+        $OTP = null;
+        $phone = null;
+
+        return view($viewPath, compact('account','cartList','OTP','phone'));
+    }
+
+    public function forgotPasswordSubmit(Request $request)
+    {
+        $input = $request->all();
+
+        $rules = [
+            'phone' => 'required|min:10',
+        ];
+
+        $validation = Validator::make($input, $rules);
+        if ($validation->passes()) {
+
+            $account = Session::get('currentAccount');
+            //dd($account);
+            $viewPath = 'theams/theam' . $account->theme . '/forgotPassword';
+            $phone = $input['phone'];
+
+            $registerCheck = Register::where('account_id', $account->id)->where('phone', $phone)->first();
+            if($registerCheck) {
+
+                $register_id = Session::getId();
+                $found = Msgnotify::where('account_id', $account->id)->where('msg_type', '6')->first();
+                $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account->id)->where('register_id', $register_id)->get();
+
+                $OTP = rand(1,999999);
+                $sign_up_message = $found->messages;
+				$sign_up_message = str_replace('[OTP]',$OTP,$sign_up_message);
+                $message = urlencode($sign_up_message);
+                
+                //$url = "http://nimbusit.co.in/api/swsendSingle.asp?username=t1thekheewa&password=100719238&sender=KHEEWA&sendto=$phone&message=$message";
+                //$url = "http://nimbusit.co.in/api/swsendSingle.asp?username=$account->SMSUserName&password=$account->SMSUserPassword&sender=$account->SMSUserSenderId&sendto=$phone&message=$message";
+                
+                $replace = str_replace('setUsername', $account->SMSUserName, $account->SMSApi);
+                $replace1 = str_replace('setPassword', $account->SMSUserPassword, $replace);
+                $replace2 = str_replace('setSenderId', $account->SMSUserSenderId, $replace1);
+                $replace3 = str_replace('setPhone', $phone, $replace2);
+                $replace4 = str_replace('setMessage', $message, $replace3);
+                $replace5 = str_replace('setTEMPLATEID', $found->template_id,$replace4);
+                $url = $replace5;
+                //dd($url);
+                $post = curl_init();
+                curl_setopt($post, CURLOPT_URL, $url);
+                curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+                curl_setopt($post, CURLOPT_CUSTOMREQUEST, 'GET');
+                $response = curl_exec($post);
+                curl_close($post);
+                $result = json_decode($response, true);
+                
+                //dd($response);
+                
+                return view($viewPath, compact('account','cartList','OTP','phone'));
+
+            } else {
+                
+                return back()->withErrors(['Enter Valid Number.']);
+            }
+
+        } else {
+
+            $errors = $validation->errors();
+            return back()->withErrors($errors);
+        }
+    }
+
+    public function forgotPasswordUpdate(Request $request)
+    {
+        $account = Session::get('currentAccount');
+        $account_id = $account->id;
+        
+        $input = $request->all();
+        $phone = $input['data']['phone'];
+        $password = bcrypt($input['data']['password']);
+
+        Register::where('account_id', $account_id)->where('phone', $phone)->update(['password' => $password]);
+
+        return response()->json($phone, 200);
+    }
+
+    public function about()
+    {
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/about';
+
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+        $aboutList = About::where('account_id', $account->id)->first();
+
+        return view($viewPath, compact('account','cartList','aboutList'));
+    }
+
+    public function privacy()
+    {
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/privacy';
+
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+        $privacyList = Privacy::where('account_id', $account->id)->first();
+        
+        return view($viewPath, compact('account','cartList', 'privacyList'));
+    }
+
+    public function shipping()
+    {
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/shipping';
+
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+        $shippingList = Shipping::where('account_id', $account->id)->first();
+
+        return view($viewPath, compact('account','cartList', 'shippingList'));
+    }
+
+    function return() {
+
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/return';
+
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+        $returnList = Returning::where('account_id', $account->id)->first();
+
+        return view($viewPath, compact('account','cartList', 'returnList'));
+    }
+
+    public function contact()
+    {
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/contact';
+        
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+        
+        $socialList = SocialMedia::where('account_id', $account->id)->first();
+        
+        return view($viewPath, compact('account','cartList', 'socialList'));
+    }
+
+    public function contactSubmit(Request $request)
+    {
+        $input = $request->all();
+
+        $rules = [
+            'name' => 'required',
+            'phone' => 'required',
+            'email' => 'required',
+            'title' => 'required',
+            'description' => 'required',
+        ];
+
+        $validation = Validator::make($input, $rules);
+        if ($validation->passes()) {
+
+            $account = Session::get('currentAccount');
+            //dd($account);
+            $viewPath = 'theams/theam' . $account->theme . '/contact';
+
+            $input['account_id'] = $account->id;
+            unset($input['_token']);
+            $logo = $account->domain.'/'.$account->logo;
+            
+            $contact = GeneralInquiry::create($input);
+            if ($contact) {
+
+                $register_id = Session::getId();
+                $socialList = SocialMedia::where('account_id', $account->id)->first();
+
+                $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account->id)->where('register_id', $register_id)->get();
+                
+                Mail::to($input['email'])->send(new WelcomeMail(['input'=>$input, 'account' => $account, 'logo' => $logo]));
+                return view($viewPath, compact('account', 'socialList','cartList'));
+
+            } else {
+
+                return back()->withErrors(['Something went wrong']);
+            }
+
+        } else {
+
+            $errors = $validation->errors();
+            return back()->withErrors($errors);
+        }
+    }
+
+    public function inquirySubmit(Request $request)
+    {
+        $input = $request->all();
+
+        $rules = [
+            'name' => 'required',
+            'phone' => 'required',
+            'email' => 'required',
+            'title' => 'required',
+            'description' => 'required',
+        ];
+
+        $validation = Validator::make($input, $rules);
+        if ($validation->passes()) {
+
+            $account = Session::get('currentAccount');
+            //dd($account);
+            $viewPath = 'theams/theam' . $account->theme . '/contact';
+
+            $input['account_id'] = $account->id;
+            unset($input['_token']);
+            $logo = $account->domain.'/'.$account->logo;
+            
+            $contact = ProductInquiry::create($input);
+            if ($contact) {
+
+                return redirect('/');
+
+            } else {
+
+                return back()->withErrors(['Something went wrong']);
+            }
+
+        } else {
+
+            $errors = $validation->errors();
+            return back()->withErrors($errors);
+        }
+    }
+
+    public function term()
+    {
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/term';
+
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+        
+        $termList = Term::where('account_id', $account->id)->first();
+        return view($viewPath, compact('account','cartList', 'termList'));
+    }
+    
+    public function addToCart(Request $request)
+    {
+        //$account = Session::get('currentAccount');
+
+        $domainName = url('/');
+        $domainName = str_replace("https://", "", $domainName);
+        $domainName = str_replace("http://", "", $domainName);
+        $domainName = str_replace("www.", "", $domainName);
+
+        $account = Account::where('domain', $domainName)->with(['currency'])->first();
+        Session::put('currentAccount', $account);
+        
+        $account_id = $account->id;
+        $register_id = Session::getId();
+        $input = $request->all();
+        $inventoryId = $input['data']['inventoryId'];
+        $affiliate_id = $input['data']['affiliateId'];
+
+        $checkInventory = ProductPrice::where('inventoryId', $inventoryId)->first();
+
+        if($checkInventory->qty) {
+
+            $checkCart  = cartTemporary::where('account_id', $account_id)->where('register_id', $register_id)->where('inventoryId', $inventoryId)->first();
+        
+            if($checkCart) {
+
+                $qty = $checkCart->qty + 1 ;
+                cartTemporary::where('account_id', $account_id)->where('register_id', $register_id)->where('inventoryId', $inventoryId)->update(['qty' => $qty]);
+                $cartMSG = "Qty update successfully";
+
+            } else {
+
+                cartTemporary::insert(['account_id'=>$account_id,'register_id'=>$register_id,'affiliate_id'=>$affiliate_id,'inventoryId'=>$inventoryId]);
+                $cartMSG = "Add successfully";
+            }
+
+        } else {
+
+            $cartMSG = "Product is out of stock";
+        }
+        
+        return response()->json($cartMSG, 200);
+    }
+
+    public function updateCart(Request $request)
+    {
+        $account = Session::get('currentAccount');
+        $account_id = $account->id;
+        $register_id = Session::getId();
+        $input = $request->all();
+        $id = $input['data']['id'];
+        $qty = $input['data']['qty'];
+        $buttonAction = $input['data']['buttonAction'];
+        if($buttonAction) {
+
+            $qty = $qty + 1 ;
+        } else {
+            $qty = $qty - 1 ;
+        }
+           
+
+        if($qty) {
+            cartTemporary::where('account_id', $account_id)->where('register_id', $register_id)->where('id', $id)->update(['qty' => $qty]);
+            $cartMSG = 1;
+
+        } else {
+
+            cartTemporary::where('id',$id)->where('register_id',$register_id)->delete();
+            $cartMSG = 0;
+        }
+
+        return response()->json($cartMSG, 200);
+    }
+
+    public function cartList(Request $request)
+    {
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/cartList';
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with([
+            
+            'cartInventory'=>function($query) {
+
+                $query->with('ProductTax');
+        },
+        'inventoryPrice',
+        ])->where('account_id', $account_id)->where('register_id', $register_id)->get();
+        
+        return view($viewPath, compact('account','cartList'));
+    }
+
+    public function removeProduct(Request $request)
+    {
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/cartList';
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $input = $request->all();
+        $inventoryId = $input['data']['inventoryId'];
+        cartTemporary::where('id',$inventoryId)->where('register_id',$register_id)->delete();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+        return view($viewPath, compact('account','cartList'));
+    }
+
+    public function checkOut(Request $request)
+    {
+		
+		$account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/checkOut';
+
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get(); 
+		
+		if(Session::get('register')){
+        $account = Session::get('currentAccount');
+        $pickupPinCode = $account->pinCode;
+        //$viewPath = 'theams/theam' . $account->theme . '/checkOut';
+        $account_id = $account->id;
+        $register_id = Session::getId();
+        $register = Session::get('register');
+		 $totalWeight = 0;
+            $totalInvoicevalue = 0;
+            $isShippingInclude = false;
+            $itemID=null;
+		$allAddresses = RegisterAddress::where('register_id', $register->id)->orderBy('id')->get();
+		 $addresses = null;
+            $deliveryPinCode = null;
+		if ($allAddresses && $allAddresses->count() == 1) {
+                $addresses = $allAddresses[0];
+                $deliveryPinCode = $addresses->zipCode;
+                Session::put('addressCode',$deliveryPinCode);
+            }
+            if(Session::get('addressCode')){
+                $deliveryPinCode = Session::get('addressCode');
+            }
+		 $addresses = null;
+            $deliveryPinCode = null;
+            $allAddresses = RegisterAddress::where('register_id', $register->id)->orderBy('id')->get();
+			//dd($allAddresses);
+            if ($allAddresses && $allAddresses->count() == 1) {
+                $addresses = $allAddresses[0];
+                $deliveryPinCode = $addresses->zipCode;
+                Session::put('addressCode',$deliveryPinCode);
+            }
+            if(Session::get('addressCode')){
+                $deliveryPinCode = Session::get('addressCode');
+            }
+            
+       /* $addresses = RegisterAddress :: where('register_id', $register->id)->first();
+        $deliveryPinCode = $addresses->zipCode;
+        $deliveryPinCode = 226026;*/
+		if ($deliveryPinCode) {
+        $avnkey = $account->shipyaariClientCode."@".$account->shipyaariParentCode;
+        $insurance="no"; //yes
+        $service_type="normal";
+        $service="economy"; //standard
+        $partner="";
+        $request_url ='https://seller.shipyaari.com/logistic/webservice/SearchAvailability_new.php';
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory','inventoryPackaging','inventoryOffer')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+        
+        foreach ($cartList as $key => $value) {
+            //dd($value->inventoryPackaging);
+            if($value->inventoryPackaging->includeShipping == 0)
+            {
+				 $isShippingInclude = true;
+                $weight = $value->inventoryPackaging->weight;
+                $length = $value->inventoryPackaging->length;
+                $width = $value->inventoryPackaging->width;
+                $height = $value->inventoryPackaging->height;
+                $total = $value->inventoryPrice->sprice;
+                $qty = $value->qty;
+                $invoicevalue = ($total * $qty) + ($total * ($value->cartInventory->ProductTax->includeTax == 0 ? $value->cartInventory->ProductTax->tax : 0)/100);
+                //dd($invoicevalue);
+                $codMode="COD";
+				$totalWeight = $totalWeight + $weight;
+				 $totalInvoicevalue = $totalInvoicevalue + $invoicevalue;
+                
+               /* $post_data="&pickup_pincode=".$pickupPinCode."&delivery_pincode=".$deliveryPinCode."&weight=".$weight."&paymentmode=".$codMode."&invoicevalue=".$invoicevalue."&avnkey=".$avnkey."&service_type=".$service_type."&partner=".$partner."&service=".$service."&length=".$length."&width=".$width."&height=".$height;
+            
+                $post = curl_init();
+                curl_setopt($post, CURLOPT_URL, $request_url);
+                curl_setopt($post, CURLOPT_POST,TRUE);
+                curl_setopt($post, CURLOPT_POSTFIELDS, json_encode($post_data));
+                curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+                $response = curl_exec($post);
+                curl_close($post);
+                $result = json_decode($response, true);
+                //dd($result);
+                $shipmentCOD=$result[0]['total'];
+
+                $onlineMode="Online";
+
+                $post_data="&pickup_pincode=".$pickupPinCode."&delivery_pincode=".$deliveryPinCode."&weight=".$weight."&paymentmode=".$onlineMode."&invoicevalue=".$invoicevalue."&avnkey=".$avnkey."&service_type=".$service_type."&partner=".$partner."&service=".$service."&length=".$length."&width=".$width."&height=".$height;
+            
+                $post = curl_init();
+                curl_setopt($post, CURLOPT_URL, $request_url);
+                curl_setopt($post, CURLOPT_POST,TRUE);
+                curl_setopt($post, CURLOPT_POSTFIELDS, json_encode($post_data));
+                curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+                $response = curl_exec($post);
+                curl_close($post);
+                $result = json_decode($response, true);
+                $shipmentOnline=$result[0]['total'];
+
+                cartTemporary::where('id', $value->id)->update(['shipmentCOD' => $shipmentCOD,'shipmentOnline' => $shipmentOnline]);*/
+				$itemID=$value->id;
+                        cartTemporary::where('id', $value->id)->update(['shipmentCOD' => null, 'shipmentOnline' => null]);
+                
+            } else {
+
+               // cartTemporary::where('id', $value->id)->update(['shipmentCOD' => null,'shipmentOnline' => null]);
+            }
+            
+        }
+		
+		}
+         if ($isShippingInclude) {
+                $codMode = "COD";
+
+                $post_data = "&pickup_pincode=" . $pickupPinCode . "&delivery_pincode=" . $deliveryPinCode . "&weight=" . $totalWeight . "&paymentmode=" . $codMode . "&invoicevalue=" . $totalInvoicevalue . "&avnkey=" . $avnkey . "&service_type=" . $service_type . "&partner=" . $partner . "&service=" . $service . "&length=" . $length . "&width=" . $width . "&height=" . $height;
+
+                $post = curl_init();
+                curl_setopt($post, CURLOPT_URL, $request_url);
+                curl_setopt($post, CURLOPT_POST, TRUE);
+                curl_setopt($post, CURLOPT_POSTFIELDS, json_encode($post_data));
+                curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+                $response = curl_exec($post);
+                curl_close($post);
+                $result = json_decode($response, true);
+                //print_r($result);
+                $shipmentCOD = $result[0]['total'];
+
+                $onlineMode = "Online";
+
+                $post_data = "&pickup_pincode=" . $pickupPinCode . "&delivery_pincode=" . $deliveryPinCode . "&weight=" . $totalWeight . "&paymentmode=" . $onlineMode . "&invoicevalue=" . $totalInvoicevalue . "&avnkey=" . $avnkey . "&service_type=" . $service_type . "&partner=" . $partner . "&service=" . $service . "&length=" . $length . "&width=" . $width . "&height=" . $height;
+
+                $post = curl_init();
+                curl_setopt($post, CURLOPT_URL, $request_url);
+                curl_setopt($post, CURLOPT_POST, TRUE);
+                curl_setopt($post, CURLOPT_POSTFIELDS, json_encode($post_data));
+                curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+                $response = curl_exec($post);
+                curl_close($post);
+                $result = json_decode($response, true);
+                $shipmentOnline = $result[0]['total'];
+                // print_r($result);exit;
+                cartTemporary::where('id', $itemID)->update(['shipmentCOD' => $shipmentCOD, 'shipmentOnline' => $shipmentOnline]);
+            }
+		             $cartList = cartTemporary::with('inventoryPrice', 'cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+        return view($viewPath, compact('account','cartList','register','addresses', 'allAddresses'));
+		}else{
+			return view($viewPath, compact('account','cartList'));
+			
+		}
+    }
+
+    public function couponCodeCodeCheck(Request $request)
+    {
+        $register_id = Session::getId();
+        $account = Session::get('currentAccount');
+        $account_id = $account->id;
+
+        $input = $request->all();
+        $couponCode = $input['data']['couponCode'];
+        $currentDate = date("Y-m-d");
+        
+        $checkOffer = OfferNormal::where('couponCode',$couponCode)
+            ->whereDate('startDate', '<=', $currentDate)
+            ->whereDate('endDate', '>=', $currentDate)    
+            ->first();
+
+        if($checkOffer) {
+
+            $offerInventories = ProductOffer::where('offerId',$checkOffer->id)->get();
+
+            $result = 0;
+            if($offerInventories) {
+                foreach ($offerInventories as $key => $offerInventory) {
+                    
+                    $checkCart  = cartTemporary::where('account_id', $account_id)->where('register_id', $register_id)->where('inventoryId', $offerInventory->inventoryId)->get();
+                    if($checkCart) {
+                        cartTemporary::where('account_id', $account_id)->where('register_id', $register_id)->where('inventoryId', $offerInventory->inventoryId)->update(['offerId' => $checkOffer->id]);
+                        $result += 1;
+                    } else {
+                        cartTemporary::where('account_id', $account_id)->where('register_id', $register_id)->update(['offerId' => null]);
+                        $result += 0;
+                    }
+                }
+
+            } else {
+                cartTemporary::where('account_id', $account_id)->where('register_id', $register_id)->update(['offerId' => null]);
+                $result = +0;
+            }
+
+        } else {
+            cartTemporary::where('account_id', $account_id)->where('register_id', $register_id)->update(['offerId' => null]);
+            $result = +0;
+        }
+
+        return response()->json($result, 200);
+    }
+
+    public function confirmOrder(Request $request){
+
+        $input = $request->all();
+
+        $rules = [
+            'name' => 'required',
+            'phone' => 'required|min:10',
+            'email' => 'required',
+            'landmark' => 'required',
+            'address' => 'required',
+            'zipCode' => 'required',
+        ];
+
+        $validation = Validator::make($input, $rules);
+		
+		 $isAddressSelected = false;
+        if (isset($input['shipping_address']) && $input['shipping_address']) {
+            $shipAddress = RegisterAddress::where('id', $input['shipping_address'])->first()->toArray();
+            if ($shipAddress && !empty($shipAddress)) {
+                $isAddressSelected = true;
+                $input['name'] = $shipAddress['name'];
+                $input['phone'] = $shipAddress['phone'];
+                $input['email'] = $shipAddress['email'];
+                $input['landmark'] = $shipAddress['landmark'];
+                $input['address'] = $shipAddress['address'];
+                $input['zipCode'] = $shipAddress['zipCode'];
+                $input['cityId'] = $shipAddress['cityId'];
+                $input['stateId'] = $shipAddress['stateId'];
+            }
+        } else {
+            $register = Session::get('register');
+            if ($register) {
+                RegisterAddress::create(['register_id' => $register->id, 'name' => $input['name'], 'phone' => $input['phone'], 'email' => $input['email'], 'landmark' => $input['landmark'], 'address' => $input['address'], 'zipCode' => $input['zipCode'], 'cityId' => $input['cityId'], 'stateId' => $input['stateId']]);
+            }
+        }
+
+        if ($validation->passes() || $isAddressSelected) {
+			Session::put('addressCode','');
+			Session::put('addressCodeID','');
+            $inputData = base64_encode(json_encode($input));
+            $customURL = url('/')."/confirmOrderProcess/".$inputData;
+            
+            if($input['transactionType'] == 1) {
+
+                return redirect()->to($customURL);
+                
+            } else {
+                
+                $account = Session::get('currentAccount');
+                
+                $ApiKey = $account->instamojoApiKey;
+                $AuthToken = $account->instamojoAuthToken;
+
+                if($account->id<3) {
+
+                    $url = 'https://test.instamojo.com/api/1.1/';
+
+                } else {
+                
+                    $url = 'https://www.instamojo.com/api/1.1/';
+                }
+                
+                $api = new \Instamojo\Instamojo(
+                    
+                    // config('services.instamojo.api_key'),
+                    // config('services.instamojo.auth_token'),
+                    // config('services.instamojo.url')
+
+                    // 'dee8187d62c63d2955baf37889e35860',
+                    // 'df569c61770b6a55f7dec9cc5d89ce9a',
+                    $ApiKey,
+                    $AuthToken,
+                    $url
+                );
+
+                try {
+					$couponDiscountAmt=(isset($input['coupon_amount']) ? $input['coupon_amount'] : 0);
+                    $grandTotal = $input['grandTotal'] - $couponDiscountAmt;
+                    $response = $api->paymentRequestCreate(array(
+                        "purpose" => "Payment to $account->domain",
+                        "amount" =>  $grandTotal,
+                        "buyer_name" => $input['name'],
+                        "send_email" => true,
+                        "email" => $input['email'],
+                        "phone" => $input['phone'],
+                        "redirect_url" =>  $customURL,
+                        ));
+                        
+                        header('Location: ' . $response['longurl']);
+                        exit();
+
+                } catch (\Exception $e) {
+                    
+                    return back()->withErrors(['Failed to pay. please try again.']);
+                }
+            }
+
+        } else {
+
+            $errors = $validation->errors();
+            return back()->withErrors($errors);
+        }
+    }
+
+    public function confirmOrderProcess(Request $request,$inputData) {
+
+        $allValues = $request->all();
+        
+        if($allValues){
+
+            $transactionId = $allValues['payment_id'];
+           
+        } else {
+
+            $transactionId = 'COD';
+        }
+
+        $account = Session::get('currentAccount');
+        $pickupPinCode = $account->pinCode;
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $register = Session::get('register');
+        $registerId = $register->id;
+
+        $lastOrder = order::where('account_id', $account_id)->orderBy('created_at', 'desc')->first();
+
+        if (!$lastOrder) {
+
+            $orderNo = 0;
+
+        } else {
+
+            $orderNo = $lastOrder->orderNo;
+        }
+
+        $orderNo = $orderNo + 1;
+
+        $input = json_decode(base64_decode($inputData),true);
+		$couponDiscountAmt=(isset($input['coupon_amount']) ? $input['coupon_amount'] : 0);
+        $name = $input['name'];
+        $phone = str_replace(' ', '', $input['phone']);
+        $email = $input['email'];
+        $landmark = $input['landmark'];
+        $address = $input['address'];
+        $zipCode = $input['zipCode'];
+        $cityId = $input['cityId'];
+        $stateId = $input['stateId'];
+        $transactionType = $input['transactionType'];
+        $grandTotal = $input['grandTotal'] - $couponDiscountAmt;;
+        
+        $orderData = ([
+            'account_id'=>$account_id,
+            'register_id'=>$registerId,
+            'name'=>$name,
+            'phone'=>$phone,
+            'email'=>$email,
+            'landmark'=>$landmark,
+            'address'=>$address,
+            'zipCode'=>$zipCode,
+            'cityId'=>$cityId,
+            'stateId'=>$stateId,
+            'transactionType'=>$transactionType,
+            'transactionId'=>$transactionId,
+            'orderNo'=>$orderNo,
+			'coupon_code' =>(isset($input['coupon']) ? $input['coupon'] : ''),
+            'coupon_amount' => (isset($input['coupon_amount']) ? $input['coupon_amount'] : 0)
+        ]);
+        
+        $order = order :: create($orderData);
+        $order_id = $order->id;
+        
+        if($order_id) {
+
+            $paymentmode = $transactionType == 1 ? "COD" : "Online";
+            $invoicevalue=$order_id;
+            $avnkey = $account->shipyaariClientCode."@".$account->shipyaariParentCode;
+            $insurance="no"; //yes
+            $service_type="normal";
+            $partner="";
+            $service="economy"; //standard
+
+            $request_url ='https://seller.shipyaari.com/logistic/webservice/SearchAvailability_new.php';
+
+            $cartList = cartTemporary::with([
+                
+                'cartInventory'=>function($query) {
+
+                    $query->with('ProductTax');
+            },
+            'inventoryPrice','inventoryPackaging',
+            ])->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+            $cartConfirm = array();
+            $package_details = array();
+            $offerJSON = array();
+            $totalWeight = 0;
+            $totalLength = 0;
+            $totalWidth = 0;
+            $totalHeight = 0;
+            $totalQty = 0;
+            $shipRocketPrArray = [];
+            foreach ($cartList as $cart => $value) {
+
+                //dd($value->inventoryPrice->sprice);
+
+                $weight = $value->inventoryPackaging->weight;
+                $length = $value->inventoryPackaging->length;
+                $width = $value->inventoryPackaging->width;
+                $height = $value->inventoryPackaging->height;
+
+                $offer_id = $value->offerId;
+                $inventoryId = $value->inventoryId;
+
+                $totalWeight += $weight;
+                $totalLength += $length;
+                $totalWidth += $width;
+                $totalHeight += $height;
+                $totalQty += $value['qty'];
+                
+                $shipping = $transactionType == 1 ? $value->shipmentCOD : $value->shipmentOnline;
+                
+                if($value->cartInventory['variation0']) {
+
+                    $tagLabel0 = Label :: with ('tag')->where('id',$value->cartInventory['variation0'])->first();
+                    $tag0 = $tagLabel0->tag->tag;
+                    $label0 = $tagLabel0->label;
+                    $variation0 = $tag0.' : '.$label0;
+                }
+
+                if($value->cartInventory['variation1']) {
+
+                    $tagLabel1 = Label :: with ('tag')->where('id',$value->cartInventory['variation1'])->first();
+                    $tag1 = $tagLabel1->tag->tag;
+                    $label1 = $tagLabel1->label;
+                    $variation1 = $tag1.' : '.$label1;
+
+                } else {
+                    $variation1 = '';
+                }
+
+                if($value->cartInventory['variation2']) {
+
+                    $tagLabel2 = Label :: with ('tag')->where('id',$value->cartInventory['variation2'])->first();
+                    $tag2 = $tagLabel2->tag->tag;
+                    $label2 = $tagLabel2->label;
+                    $variation2 = $tag2.' : '.$label2;
+
+                } else {
+                    $variation2 = '';
+                }
+
+                if($value->cartInventory['variation3']) { 
+
+                    $tagLabel3 = Label :: with ('tag')->where('id',$value->cartInventory['variation3'])->first();
+                    $tag3 = $tagLabel3->tag->tag;
+                    $label3 = $tagLabel3->label;
+                    $variation3 = $tag3.' : '.$label3;
+
+                } else {
+                    $variation3 = '';
+                }
+
+                if($value->cartInventory['variation4']) { 
+
+                    $tagLabel4 = Label :: with ('tag')->where('id',$value->cartInventory['variation4'])->first();
+                    $tag4 = $tagLabel4->tag->tag;
+                    $label4 = $tagLabel4->label;
+                    $variation4 = $tag4.' : '.$label4;
+
+                } else {
+
+                    $variation4 = '';
+                }
+                
+                array_push($cartConfirm,[
+                    'order_id'=>$order_id,
+                    'affiliate_id'=>$value['affiliate_id'],
+                    'affiliate_Amt'=>$value['affiliate_id'] != NULL ? $value->inventoryPrice['sellingAffiliationCharge'] : NULL,
+                    'qty'=>$value['qty'],
+                    'price'=>$value->inventoryPrice['sprice'],
+                    'tax'=>$value->cartInventory->ProductTax['includeTax'] == 0 ? $value->cartInventory->ProductTax['tax'] : 0,
+                    'shipping'=>$shipping,
+                    'inventory_id'=>$value['inventoryId'],
+                    'sku'=>$value->cartInventory['sku'],
+                    'productName'=>$value->cartInventory['productName'],
+                    'productDescription'=>$value->cartInventory['productDescription'],
+                    'variation0'=>$variation0,
+                    'variation1'=>$variation1,
+                    'variation2'=>$variation2,
+                    'variation3'=>$variation3,
+                    'variation4'=>$variation4,
+                    'imageURL0'=>$value->cartInventory['imageURL0'],
+                    'imageURL1'=>$value->cartInventory['imageURL1'],
+                    'imageURL2'=>$value->cartInventory['imageURL2'],
+                    'imageURL3'=>$value->cartInventory['imageURL3'],
+                    'imageURL4'=>$value->cartInventory['imageURL4'],
+                    'imageURL5'=>$value->cartInventory['imageURL5'],
+                    'videoURL'=>$value->cartInventory['videoURL'],
+                    'pdfURL'=>$value->cartInventory['pdfURL']
+                ]);
+                array_push($shipRocketPrArray,[
+				                   "name"=>$value->cartInventory['productName'],
+								   "sku"=>$value->cartInventory['sku'],
+								   "units"=>$value['qty'],
+								   "selling_price"=> $value->inventoryPrice['sprice'],
+								   "discount"=> 0,
+								   "tax"=> "",
+								   "hsn"=> ""
+											 ]);
+                array_push($package_details,[
+                    "name" => $value->cartInventory['productName'],
+                    "total" => ($value->inventoryPrice['sprice'] * $value['qty']) + ($shipping) + (($value->inventoryPrice['sprice'] * $value->cartInventory->ProductTax['tax']/100) * $value['qty']),
+                    "qty" => $value['qty'],
+                    "sku" => $value->cartInventory['sku'],
+                    "hsn" => "",
+                ]);
+
+                if($offer_id) {
+                    array_push($offerJSON, ['order_detail_id' => $order_id, 'offer_type' => 1, 'offer_id' => $offer_id,'inventoryId'=>$inventoryId]);
+                }
+            }
+            
+            orderDetail :: insert($cartConfirm);
+            orderOffer :: insert($offerJSON);
+            cartTemporary::where('account_id',$account_id)->where('register_id',$register_id)->delete();
+
+            // Shipyaari
+            $order_id = $order_id;
+            $from_contact_number = $account->phone;
+            $from_pincode = $account->pinCode;
+            $from_landmark = $account->landmark;
+            $from_address = $account->address;
+            $from_address2 = "";
+            $to_pincode = $zipCode;
+            $to_landmark = $landmark;
+            $to_address = $address;
+            $to_address2 = "";
+            $customer_name = $name;
+            $customer_email = $email;
+            $customer_contact_no = $phone;
+            $ship_date = date('Y-m-d');
+            $no_of_packages = 1;
+            $package_type = "identical";
+            $total_invoice_value = $grandTotal;
+            $username = $account->shipyaariUserName; //"info@warmzone.co.in";
+            $created_by = $account->shipyaariClientCode;
+            $avnkey = $account->shipyaariClientCode."@".$account->shipyaariParentCode;
+            $payment_mode = $transactionType == 1 ? "COD": "Online";
+            $payment_modeShipR = $transactionType == 1 ? "COD": "Prepaid";
+            $total_price_set = $grandTotal;
+            $channel = "API";
+            // Shipyaari
+
+            $productData = [
+                "package_weight" => $totalWeight,
+                "package_length" => $totalLength,
+                "package_width" => $totalWidth,
+                "package_height" => $totalHeight,
+                "total" => $grandTotal,
+                "total_qty" => $totalQty,
+                "package_details" => $package_details,
+            ];
+
+            $shipyaariData = [
+                "username" => base64_encode($username),
+                "insurance" => base64_encode($insurance),
+                "order_id" => base64_encode($order_id),
+                "from_contact_number" => base64_encode($from_contact_number),
+                "from_pincode" => base64_encode($from_pincode),
+                "from_landmark" => base64_encode($from_landmark),
+                "from_address" => base64_encode($from_address),
+                "from_address2" => base64_encode($from_address2),
+                "to_pincode" => base64_encode($to_pincode),
+                "to_landmark" => base64_encode($to_landmark),
+                "to_address" => base64_encode($to_address),
+                "to_address2" => base64_encode($to_address2),
+                "customer_name" => base64_encode($customer_name),
+                "customer_email" => base64_encode($customer_email),
+                "customer_contact_no" => base64_encode($customer_contact_no),
+                "ship_date" => base64_encode($ship_date),
+                "package_type" => base64_encode($package_type),
+            
+                "total_invoice_value" => base64_encode($total_invoice_value),
+            
+                "created_by" => base64_encode($created_by),
+                "avnkey" => base64_encode($avnkey),
+            
+                "payment_mode" => base64_encode($payment_mode),
+            
+                "no_of_packages" => base64_encode($no_of_packages),
+                "total_price_set" => $total_price_set,
+                "channel" => $channel,
+                "product_data" => [$productData]
+            ];
+            //dd($shipyaariData);
+			/***************************************/
+			$shipRocketArray = array (
+								  'order_id' => $order_id,
+								  'order_date' => date('Y-m-d H:i:s'),
+								  'pickup_location' => $account->shiprocketPickupLocation,
+								  'billing_customer_name' => $customer_name,
+								  'billing_address' => $to_address,
+								  'billing_address_2' => $to_landmark,
+								  'billing_city' => $cityId,
+								  'billing_pincode' => $zipCode,
+								  'billing_state' => $stateId,
+								  'billing_country' => 'India',
+								  'billing_email' => $customer_email,
+								  'billing_phone' => $customer_contact_no,
+								  'shipping_is_billing' => true,
+								  'shipping_customer_name' => '',
+								  'shipping_last_name' => '',
+								  'shipping_address' => '',
+								  'shipping_address_2' => '',
+								  'shipping_city' => '',
+								  'shipping_pincode' => '',
+								  'shipping_country' => '',
+								  'shipping_state' => '',
+								  'shipping_email' => '',
+								  'shipping_phone' => '',
+								  'order_items' => $shipRocketPrArray,
+								  'payment_method' => $payment_modeShipR,
+								  'shipping_charges' => 0,
+								  'giftwrap_charges' => 0,
+								  'transaction_charges' => 0,
+								  'total_discount' => 0,
+								  'sub_total' => $total_invoice_value,
+								  'length' => $totalLength,
+								  'breadth' => $totalWidth,
+								  'height' => $totalHeight,
+								  'weight' => $totalWeight,
+								);
+			/***************************************/
+            order::where('id', $order_id)->where('account_id',$account_id)->update(['payLoad' => $shipyaariData,'payLoadShipRocket'=>json_encode($shipRocketArray)]);
+
+            $logo = $account->domain.'/'.$account->logo;
+            Mail::to($email)->send(new ConfirmOrderMail(['orderData'=>$orderData,'cartConfirm'=>$cartConfirm, 'account' => $account, 'logo' => $logo]));
+            $found = Msgnotify::where('account_id', $account_id)->where('msg_type', '1')->first();
+            $message = $found->messages;
+            $message = str_replace('[CUSTOMER_NAME]',$name,$message);
+            $message = str_replace('[ORDER_NO]',$orderNo,$message);
+            $message = str_replace('[Order_Number]',$orderNo,$message);
+            $message = str_replace('[Order_Amount]',$grandTotal,$message);
+            $message = str_replace('[GRAND_TOTAL]',$grandTotal,$message);
+            $message = str_replace('[Date_of_Order]',date('Y-m-d'),$message);
+            $message = str_replace('[User_Mobile_Number]',$customer_contact_no,$message);
+            $message = urlencode($message);
+                
+            $replace = str_replace('setUsername', $account->SMSUserName, $account->SMSApi);
+            $replace1 = str_replace('setPassword', $account->SMSUserPassword, $replace);
+            $replace2 = str_replace('setSenderId', $account->SMSUserSenderId, $replace1);
+            $replace3 = str_replace('setPhone', $phone, $replace2);
+            $replace4 = str_replace('setMessage', $message, $replace3);
+			$replace5 = str_replace('setTEMPLATEID', $found->template_id,$replace4);
+
+            $url = $replace5;
+            
+            $post = curl_init();
+            curl_setopt($post, CURLOPT_URL, $url);
+            curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+            curl_setopt($post, CURLOPT_CUSTOMREQUEST, 'GET');
+            $response = curl_exec($post);
+            curl_close($post);
+            $result = json_decode($response, true);
+
+            return redirect('/orderList');
+            
+        } else {
+
+            return back()->withErrors(['Failed to pay. please try again.']);
+        }
+    }
+
+    public function orderList(Request $request)
+    {
+        $account = Session::get('currentAccount');       
+        $register = Session::get('register');
+
+        if($register) {
+            
+            $viewPath = 'theams/theam' . $account->theme . '/orderList';
+            $registerId = $register->id;
+            $account_id = $account->id;
+            $register_id = Session::getId();
+
+            $orderList = order :: with([
+                'orderDetails'=>function($query) {
+                    $query->with(['inventoryPackaging','orderOffers'=>function($query) { $query->with('offer');}]);
+                }
+            ])->where('register_id',$registerId)->orderBy('id', 'desc')->get();
+            //dd($orderList);
+
+            $cartList = cartTemporary::with([
+                
+                'cartInventory'=>function($query) {
+
+                    $query->with('ProductTax');
+            },
+            'inventoryPrice',
+            ])->where('account_id', $account_id)->where('register_id', $register_id)->get();
+            
+            
+            $avnkey = $account->shipyaariClientCode."@".$account->shipyaariParentCode;
+            $request_url ='https://seller.shipyaari.com/avn_ci/siteadmin/track/trackstatus/';
+
+            foreach ($orderList as $key => $value) {
+                
+                if($value->courierType == 1)
+                {
+                    $shipyaariOrder = json_decode($value->shipyaariOrder, true);
+                    
+                    $post_data = ['avn_key' => $avnkey,'tracking_number' =>[$shipyaariOrder['tracking_number'] ?? '']];
+
+                    $post = curl_init();
+                    curl_setopt($post, CURLOPT_URL, $request_url);
+                    curl_setopt($post, CURLOPT_POST,TRUE);
+                    curl_setopt($post, CURLOPT_POSTFIELDS, json_encode($post_data));
+                    curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+                    curl_setopt($post, CURLOPT_HTTPHEADER, array('Accept:application/json' , 'Content-Type:application/json'));
+                    $response = curl_exec($post);
+                    curl_close($post);
+                    $result = json_decode($response, true);
+                
+                    $orderStatus = $result['data'][0]['status_code'] ?? 1;
+    
+                    if($orderStatus == 4) {
+
+                        order::where('id', $value->id)->update(['orderStatus' => $orderStatus,'shipyaariDeliver' => $result]);
+                    }
+
+                    if($orderStatus == 18) {
+
+                        order::where('id', $value->id)->update(['orderStatus' => $orderStatus,'shipyaariCancel' => $result]);
+                    }
+
+                    if($orderStatus == 9) {
+
+                        order::where('id', $value->id)->update(['orderStatus' => $orderStatus,'shipyaariReverse' => $result]);
+                    }
+                }                
+            }
+            
+            return view($viewPath, compact('account','orderList','cartList'));
+
+        } else {
+
+            $viewPath = 'theams/theam' . $account->theme . '/login';
+
+            $account_id = $account->id;
+            $register_id = Session::getId();
+
+            $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+            return view($viewPath, compact('account','cartList'));
+
+        }
+        
+    }
+
+    public function orderCancel(Request $request)
+    {
+        $account = Session::get('currentAccount');
+
+        $input = $request->all();
+        $orderNo = $input['data']['orderNo'];
+        $shipyaariId = $input['data']['shipyaariId']; // courierType
+
+        if($shipyaariId != 'courierType') {
+
+            //$avnkey="10393@5183";
+            $avnkey = $account->shipyaariClientCode."@".$account->shipyaariParentCode;
+                
+            $request_url ='https://seller.shipyaari.com/avn_ci/siteadmin/cancel_consignment/';
+
+            $post_data = ['avn_key' => $avnkey,'ids' =>[$shipyaariId]];
+
+            $post = curl_init();
+            curl_setopt($post, CURLOPT_URL, $request_url);
+            curl_setopt($post, CURLOPT_POST,TRUE);
+            curl_setopt($post, CURLOPT_POSTFIELDS, json_encode($post_data));
+            curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+            curl_setopt($post, CURLOPT_HTTPHEADER, array('Accept:application/json' , 'Content-Type:application/json'));
+            $response = curl_exec($post);
+            curl_close($post);
+            $result = json_decode($response, true);
+
+            order::where('account_id', $account->id)->where('orderNo', $orderNo)->update(['orderStatus' =>18,'shipyaariCancel' =>$response]);
+
+        } else {
+
+            $response = 'Order Canceled';
+            order::where('account_id', $account->id)->where('orderNo', $orderNo)->update(['orderStatus' =>18,'shipyaariCancel' =>'Order Canceled']);
+        }
+        
+        return response()->json($response, 200);
+    }
+
+    public function orderReturn(Request $request) {
+        
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/orderList';
+       
+        $register = Session::get('register');
+        $registerId = $register->id;
+        $account_id = $account->id;
+        
+        $input = $request->all();
+        $orderNo = $input['orderNo'];
+
+        $order = order :: with([
+            'orderDetails'=>function($query) {
+
+                $query->with(['inventory_price']);
+            },
+            'orderDetails'=>function($query) {
+
+                $query->with(['inventoryPackaging']);
+            },
+        ])->where('orderNo',$orderNo)->where('account_id',$account_id)->where('register_id',$registerId)->first();
+        
+        if($order->courierType == 1)
+        {
+            $package_details = array();
+            $totalWeight = 0;
+            $totalLength = 0;
+            $totalWidth = 0;
+            $totalHeight = 0;
+            $totalQty = 0;
+            $grandTotal = 0;
+
+            foreach ($order->orderDetails as $cart => $value) {
+                
+                array_push($package_details,[
+                    "name" => $value->productName,
+                    "total" => ($value->price * $value->qty) + ($value->shipping) + (($value->price * $value->tax/100) * $value->qty),
+                    "qty" => $value->qty,
+                    "sku" => $value->sku,
+                    "hsn" => "",
+                ]);
+
+                $grandTotal = ($value->price * $value->qty) + ($value->shipping) + ( ($value->price * $value->qty) * $value->tax/100);
+                $weight = $value->inventoryPackaging->weight;
+                $length = $value->inventoryPackaging->length;
+                $width = $value->inventoryPackaging->width;
+                $height = $value->inventoryPackaging->height;
+
+                $totalWeight += $weight;
+                $totalLength += $length;
+                $totalWidth += $width;
+                $totalHeight += $height;
+                $totalQty += $value['qty'];
+                
+                $shipping = $value->shipping;
+            }
+
+            // Shipyaari
+            $insurance = "no";
+            $order_id = $order->id."_reverse";
+            $from_contact_number = $account->phone;
+            $from_pincode = $account->pinCode;
+            $from_landmark = $account->landmark;
+            $from_address = $account->address;
+            $from_address2 = "";
+            $to_pincode = $order->zipCode;
+            $to_landmark = $order->landmark;
+            $to_address = $order->address;
+            $to_address2 = "";
+            $customer_name = $order->name;
+            $customer_email = $order->email;
+            $customer_contact_no = $order->phone;
+            $ship_date = date('Y-m-d');
+            $no_of_packages = 1;
+            $package_type = "identical";
+            $total_invoice_value = $grandTotal;
+            $username = $account->shipyaariUserName;
+            $created_by = $account->shipyaariClientCode;
+            $avnkey = $account->shipyaariClientCode."@".$account->shipyaariParentCode;
+            $payment_mode = "Online";
+            $total_price_set = $grandTotal;
+            $channel = "API";
+            // Shipyaari
+
+            $productData = [
+                "package_weight" => $totalWeight,
+                "package_length" => $totalLength,
+                "package_width" => $totalWidth,
+                "package_height" => $totalHeight,
+                "total" => $grandTotal,
+                "total_qty" => $totalQty,
+                "package_details" => $package_details,
+            ];
+
+            $shipyaariData = [
+                "username" => base64_encode($username),
+                "insurance" => base64_encode($insurance),
+                "order_id" => base64_encode($order_id),
+                "from_contact_number" => base64_encode($from_contact_number),
+                "from_pincode" => base64_encode($from_pincode),
+                "from_landmark" => base64_encode($from_landmark),
+                "from_address" => base64_encode($from_address),
+                "from_address2" => base64_encode($from_address2),
+                "to_pincode" => base64_encode($to_pincode),
+                "to_landmark" => base64_encode($to_landmark),
+                "to_address" => base64_encode($to_address),
+                "to_address2" => base64_encode($to_address2),
+                "customer_name" => base64_encode($customer_name),
+                "customer_email" => base64_encode($customer_email),
+                "customer_contact_no" => base64_encode($customer_contact_no),
+                "ship_date" => base64_encode($ship_date),
+                "package_type" => base64_encode($package_type),
+            
+                "total_invoice_value" => base64_encode($total_invoice_value),
+            
+                "created_by" => base64_encode($created_by),
+                "avnkey" => base64_encode($avnkey),
+            
+                "payment_mode" => base64_encode($payment_mode),
+                "package_name" => base64_encode("Reverse"),
+            
+                "no_of_packages" => base64_encode($no_of_packages),
+                "total_price_set" => $total_price_set,
+                "channel" => $channel,
+                "product_data" => [$productData]
+            ];
+
+            //dd($shipyaariData);
+
+            $payLoad =  json_encode($shipyaariData);
+            $request_url = "https://seller.shipyaari.com/logistic/webservice/create_consignment_api.php";
+            $post = curl_init();
+            curl_setopt($post, CURLOPT_URL, $request_url);
+            curl_setopt($post, CURLOPT_POST, TRUE);
+            curl_setopt($post, CURLOPT_POSTFIELDS, $payLoad);
+            curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+            curl_setopt($post, CURLOPT_HTTPHEADER, array('Accept:application/json' , 'Content-Type:application/json'));
+            $response = curl_exec($post);
+
+            curl_close($post);
+
+            order::where('account_id', $account_id)->where('register_id', $registerId)->where('orderNo', $orderNo)->update(['orderStatus' =>9,'shipyaariReverse' =>$response]);
+            
+            
+        } else {
+
+            $response ='Order Return';
+            order::where('account_id', $account_id)->where('register_id', $registerId)->where('orderNo', $orderNo)->update(['orderStatus' =>9,'shipyaariReverse' =>$response]);
+
+        }
+        return redirect('/orderList');
+    }
+
+    public function orderReplacement(Request $request) {
+        
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/orderList';
+       
+        $register = Session::get('register');
+        $registerId = $register->id;
+        $account_id = $account->id;
+        
+        $input = $request->all();
+        $orderNo = $input['orderNo'];
+
+        $order = order :: with([
+            'orderDetails'=>function($query) {
+
+                $query->with(['inventory_price']);
+            },
+            'orderDetails'=>function($query) {
+
+                $query->with(['inventoryPackaging']);
+            },
+        ])->where('orderNo',$orderNo)->where('account_id',$account_id)->where('register_id',$registerId)->first();
+        if($order->courierType == 1)
+        {
+            $package_details = array();
+            $totalWeight = 0;
+            $totalLength = 0;
+            $totalWidth = 0;
+            $totalHeight = 0;
+            $totalQty = 0;
+            $grandTotal = 0;
+
+            foreach ($order->orderDetails as $cart => $value) {
+                
+                array_push($package_details,[
+                    "name" => $value->productName,
+                    "total" => ($value->price * $value->qty) + ($value->shipping) + (($value->price * $value->tax/100) * $value->qty),
+                    "qty" => $value->qty,
+                    "sku" => $value->sku,
+                    "hsn" => "",
+                ]);
+
+                $grandTotal = ($value->price * $value->qty) + ($value->shipping) + ( ($value->price * $value->qty) * $value->tax/100);
+                $weight = $value->inventoryPackaging->weight;
+                $length = $value->inventoryPackaging->length;
+                $width = $value->inventoryPackaging->width;
+                $height = $value->inventoryPackaging->height;
+
+                $totalWeight += $weight;
+                $totalLength += $length;
+                $totalWidth += $width;
+                $totalHeight += $height;
+                $totalQty += $value['qty'];
+                
+                $shipping = $value->shipping;
+            }
+
+            // Shipyaari
+            $insurance = "no";
+            $from_contact_number = $account->phone;
+            $from_pincode = $account->pinCode;
+            $from_landmark = $account->landmark;
+            $from_address = $account->address;
+            $from_address2 = "";
+            $to_pincode = $order->zipCode;
+            $to_landmark = $order->landmark;
+            $to_address = $order->address;
+            $to_address2 = "";
+            $customer_name = $order->name;
+            $customer_email = $order->email;
+            $customer_contact_no = $order->phone;
+            $ship_date = date('Y-m-d');
+            $no_of_packages = 1;
+            $package_type = "identical";
+            $total_invoice_value = $grandTotal;
+            $username = $account->shipyaariUserName;
+            $created_by = $account->shipyaariClientCode;
+            $avnkey = $account->shipyaariClientCode."@".$account->shipyaariParentCode;
+            
+            $total_price_set = $grandTotal;
+            $channel = "API";
+            // Shipyaari
+
+            $productData = [
+                "package_weight" => $totalWeight,
+                "package_length" => $totalLength,
+                "package_width" => $totalWidth,
+                "package_height" => $totalHeight,
+                "total" => $grandTotal,
+                "total_qty" => $totalQty,
+                "package_details" => $package_details,
+            ];
+
+            /*For Order Return*/
+            $order_id = $order->id."_reverse";
+            $payment_mode = "Online";
+
+            $shipyaariData = [
+                "username" => base64_encode($username),
+                "insurance" => base64_encode($insurance),
+                "order_id" => base64_encode($order_id),
+                "from_contact_number" => base64_encode($from_contact_number),
+                "from_pincode" => base64_encode($from_pincode),
+                "from_landmark" => base64_encode($from_landmark),
+                "from_address" => base64_encode($from_address),
+                "from_address2" => base64_encode($from_address2),
+                "to_pincode" => base64_encode($to_pincode),
+                "to_landmark" => base64_encode($to_landmark),
+                "to_address" => base64_encode($to_address),
+                "to_address2" => base64_encode($to_address2),
+                "customer_name" => base64_encode($customer_name),
+                "customer_email" => base64_encode($customer_email),
+                "customer_contact_no" => base64_encode($customer_contact_no),
+                "ship_date" => base64_encode($ship_date),
+                "package_type" => base64_encode($package_type),
+            
+                "total_invoice_value" => base64_encode($total_invoice_value),
+            
+                "created_by" => base64_encode($created_by),
+                "avnkey" => base64_encode($avnkey),
+            
+                "payment_mode" => base64_encode($payment_mode),
+                "package_name" => base64_encode("Reverse"),
+            
+                "no_of_packages" => base64_encode($no_of_packages),
+                "total_price_set" => $total_price_set,
+                "channel" => $channel,
+                "product_data" => [$productData]
+            ];
+
+            $payLoad =  json_encode($shipyaariData);
+            $request_url = "https://seller.shipyaari.com/logistic/webservice/create_consignment_api.php";
+            $post = curl_init();
+            curl_setopt($post, CURLOPT_URL, $request_url);
+            curl_setopt($post, CURLOPT_POST, TRUE);
+            curl_setopt($post, CURLOPT_POSTFIELDS, $payLoad);
+            curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+            curl_setopt($post, CURLOPT_HTTPHEADER, array('Accept:application/json' , 'Content-Type:application/json'));
+            $response = curl_exec($post);
+            curl_close($post);
+
+            /*For Order Return*/
+
+            /*For Order Replacement*/
+            $order_id = $order->id."_replacement ";
+            $payment_mode = $order->transactionType == 1 ? "COD": "Online";
+
+            $shipyaariData = [
+                "username" => base64_encode($username),
+                "insurance" => base64_encode($insurance),
+                "order_id" => base64_encode($order_id),
+                "from_contact_number" => base64_encode($from_contact_number),
+                "from_pincode" => base64_encode($from_pincode),
+                "from_landmark" => base64_encode($from_landmark),
+                "from_address" => base64_encode($from_address),
+                "from_address2" => base64_encode($from_address2),
+                "to_pincode" => base64_encode($to_pincode),
+                "to_landmark" => base64_encode($to_landmark),
+                "to_address" => base64_encode($to_address),
+                "to_address2" => base64_encode($to_address2),
+                "customer_name" => base64_encode($customer_name),
+                "customer_email" => base64_encode($customer_email),
+                "customer_contact_no" => base64_encode($customer_contact_no),
+                "ship_date" => base64_encode($ship_date),
+                "package_type" => base64_encode($package_type),
+            
+                "total_invoice_value" => base64_encode($total_invoice_value),
+            
+                "created_by" => base64_encode($created_by),
+                "avnkey" => base64_encode($avnkey),
+            
+                "payment_mode" => base64_encode($payment_mode),
+            
+                "no_of_packages" => base64_encode($no_of_packages),
+                "total_price_set" => $total_price_set,
+                "channel" => $channel,
+                "product_data" => [$productData]
+            ];
+
+            $payLoad =  json_encode($shipyaariData);
+            $request_url = "https://seller.shipyaari.com/logistic/webservice/create_consignment_api.php";
+            $post = curl_init();
+            curl_setopt($post, CURLOPT_URL, $request_url);
+            curl_setopt($post, CURLOPT_POST, TRUE);
+            curl_setopt($post, CURLOPT_POSTFIELDS, $payLoad);
+            curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+            curl_setopt($post, CURLOPT_HTTPHEADER, array('Accept:application/json' , 'Content-Type:application/json'));
+            $response = curl_exec($post);
+            curl_close($post);
+
+            order::where('account_id', $account_id)->where('register_id', $registerId)->where('orderNo', $orderNo)->update(['orderStatus' =>19,'shipyaariReplcament' =>$response]);
+            /*For Order Replacement*/
+            
+        } else {
+            $response ='Order Replcament';
+            order::where('account_id', $account_id)->where('register_id', $registerId)->where('orderNo', $orderNo)->update(['orderStatus' =>19,'shipyaariReplcament' =>$response]);
+        }
+        
+
+        return redirect('/orderList');
+    }
+
+    public function zipCodeCheck(Request $request)
+    {
+        $account = Session::get('currentAccount');
+        $pickupPinCode = $account->pinCode;
+
+        $input = $request->all();
+        $zipCode = $input['data']['zipCode'];
+
+        $paymentmode="cod";
+        $invoicevalue=100;
+        //$avnkey="10393@5183";
+        $avnkey = $account->shipyaariClientCode."@".$account->shipyaariParentCode;
+        $insurance="no"; //yes
+        $service_type="normal";
+        $partner="";
+        $service="economy"; //standard
+        $request_url ='https://seller.shipyaari.com/logistic/webservice/SearchAvailability_new.php';
+
+        $post_data="&pickup_pincode=".$pickupPinCode."&delivery_pincode=".$zipCode."&weight=1.00&paymentmode=".$paymentmode."&invoicevalue=".$invoicevalue."&avnkey=".$avnkey."&service_type=".$service_type."&partner=".$partner."&service=".$service."&length=1.00&width=1.00&height=1.00";
+        
+        $post = curl_init();
+        curl_setopt($post, CURLOPT_URL, $request_url);
+        curl_setopt($post, CURLOPT_POST,TRUE);
+        curl_setopt($post, CURLOPT_POSTFIELDS, json_encode($post_data));
+        curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+        $response = curl_exec($post);
+        //print_r($response);
+        curl_close($post);
+        $result = json_decode($response, true);
+
+        return response()->json($result, 200);
+    }
+
+    public function updateRegister(Request $request)
+    {
+        $input = $request->all();
+        $name = $input['data']['name'];
+        $phone = $input['data']['phone'];
+        $email = $input['data']['email'];
+        $landmark = $input['data']['landmark'];
+        $address = $input['data']['address'];
+        $zipCode = $input['data']['zipCode'];
+        $cityId = $input['data']['cityId'];
+        $stateId = $input['data']['stateId'];
+        $zipCode = $input['data']['zipCode'];
+
+        $register = Session::get('register');
+        $register_id = $register->id;
+        
+	    $custAddres= RegisterAddress::create(['register_id'=> $register_id,'name' => $name, 'phone' => $phone, 'email' => $email, 'landmark' => $landmark, 'address' => $address, 'zipCode' => $zipCode, 'cityId' => $cityId, 'stateId' => $stateId]);
+				
+		Session::put('addressCodeID',$custAddres->id);
+        Session::put('addressCode',$zipCode);
+
+        return response()->json('success', 200);
+    }
+
+    public function changePassword()
+    {
+        $account = Session::get('currentAccount');
+        $viewPath = 'theams/theam1/changePassword';
+
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+        $phone = null;
+
+        return view($viewPath, compact('account','cartList','phone'));
+    }
+
+    public function changePasswordSubmit(Request $request)
+    {
+
+        $account = Session::get('currentAccount');
+        $account_id = $account->id;
+
+        $register = Session::get('register');
+        $registerId = $register->id;
+        
+        $input = $request->all();
+
+        $rules = [
+            'password' => 'required',
+            'confirmPassword' => 'required',
+            'password' => 'required_with:confirmPassword|same:confirmPassword',
+        ];
+
+        $validation = Validator::make($input, $rules);
+        if ($validation->passes()) {
+
+            $password = bcrypt($input['password']);
+
+            Register::where('account_id', $account_id)->where('id', $registerId)->update(['password' => $password]);
+
+            $request->session()->flush();
+            return redirect('/');
+
+        } else {
+
+            $errors = $validation->errors();
+            return back()->withErrors($errors);
+        }
+    }
+    
+    public function address(Request $request)
+    {
+        $account = Session::get('currentAccount');
+        $account_id = $account->id;
+
+        $register = Session::get('register');
+        $register_id = Session::getId();
+
+        if($register) {
+
+            $viewPath = 'theams/theam1/address';
+$allQuery = $request->all();
+			$addressId = (isset($allQuery['address'])?$allQuery['address']:'');
+            $allAddresses = null;
+            $addresses =null;
+            if($addressId){
+                $addresses =  RegisterAddress::where('register_id', $register->id)->where('id',$addressId)->first();
+            }else{
+                $allAddresses = RegisterAddress::where('register_id', $register->id)->get();
+            }
+            $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+            return view($viewPath, compact('account','cartList','register','addresses','allAddresses'));
+
+        } else {
+
+            $viewPath = 'theams/theam' . $account->theme . '/login';
+
+            $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+            return view($viewPath, compact('account','cartList'));
+
+        }
+    }
+
+    public function addressSubmit(Request $request)
+    {
+        $register = Session::get('register');
+        $input = $request->all();
+        $rules = [
+            'name' => 'required',
+            'phone' => 'required',
+            'email' => 'required',
+            'landmark' => 'required',
+            'address' => 'required',
+            'zipCode' => 'required',
+        ];
+
+        $validation = Validator::make($input, $rules);
+        if ($validation->passes()) {
+
+            unset($input['_token']);
+
+            $address =  RegisterAddress::where('register_id', $register->id)->where('id',$input['id'])->update($input);
+
+            if($address)
+            {
+               
+                return redirect('address')->with('message', 'Address Sucessfully Updated');
+ 
+            } else {
+
+                return back()->withErrors(['Something went wrong']);
+            }
+
+        } else {
+
+            $errors = $validation->errors();
+            return back()->withErrors($errors);
+        }
+    }
+	public function pages($id){
+		$account = Session::get('currentAccount');
+        $viewPath = 'theams/theam' . $account->theme . '/pages';
+        $account_id = $account->id;
+        $register_id = Session::getId();
+
+        $cartList = cartTemporary::with('inventoryPrice','cartInventory')->where('account_id', $account_id)->where('register_id', $register_id)->get();
+
+        $aboutList =    DB::table('faq')
+		                   ->where('account_id',$account->id)
+		                   ->where('id',$id)
+						   ->first();
+
+        return view($viewPath, compact('account','cartList','aboutList'));
+	}
+	
+	public function check_coupon(Request $request)
+    {
+        $account = Session::get('currentAccount'); 
+        $account_id =$account->id;
+        
+        $discountAmount = 0;
+        $currentDate = date("Y-m-d");
+        $offerData = OfferNormal::where('account_id', $account_id)->where('couponCode', $request->code)
+        ->whereDate('startDate', '<=', $currentDate)->whereDate('endDate', '>=', $currentDate)->where('status', 1)->first();
+        if ($offerData) {
+            if ($request->subTotal < $offerData->cartMinValue) {
+                $msg = 'Coupon only apply to minimum RS.' . $offerData->cartMinValue;
+            } else {
+                $discountAmount = number_format(($request->subTotal * ($offerData->discount / 100)));
+                if ($discountAmount > $offerData->cartMinValue) {
+                    $discountAmount = $offerData->cartMinValue;
+                }
+                $msg = 'Coupon Found';
+            }
+        } else {
+            $msg = 'Coupon not found or invalid';
+        }
+        $grandTotal=number_format($request->subTotal-$discountAmount,2);
+
+        return json_encode(array('status' => ($discountAmount ? true : false),'grandtotal'=>$grandTotal, 'discountAmount' => $discountAmount, 'msg' => $msg));
+    }
+
+    public function request_otp(Request $request)
+    {
+        $account = Session::get('currentAccount');
+        $account_id = $account->id;
+        $register = Register::where('account_id', $account_id)->where('phone', $request->mobile)->where('status', 1)->first();
+        if (!$register) {
+            return array('status' => false, 'msg' => 'Number not found.');
+        } else {
+			$found = Msgnotify::where('account_id', $account_id)->where('msg_type', '5')->first();
+            $OTP = rand(1000, 9999);
+			$sign_up_message = $found->messages;
+			$sign_up_message = str_replace('[OTP]',$OTP,$sign_up_message);
+            $message = urlencode($sign_up_message);
+            Session::put('loginOtp', $OTP);
+            $account = Session::get('currentAccount');
+            $replace = str_replace('setUsername', $account->SMSUserName, $account->SMSApi);
+            $replace1 = str_replace('setPassword', $account->SMSUserPassword, $replace);
+            $replace2 = str_replace('setSenderId', $account->SMSUserSenderId, $replace1);
+            $replace3 = str_replace('setPhone', $request->mobile, $replace2);
+            $replace4 = str_replace('setMessage', $message, $replace3);
+			$replace5 = str_replace('setTEMPLATEID', $found->template_id,$replace4);
+
+            $url = $replace5;
+            //dd($url);
+            $post = curl_init();
+            curl_setopt($post, CURLOPT_URL, $url);
+            curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+            curl_setopt($post, CURLOPT_CUSTOMREQUEST, 'GET');
+            $response = curl_exec($post);
+            curl_close($post);
+            $result = json_decode($response, true);
+
+            //dd($response);
+            return array('status' => true,'data'=>$url);
+        }
+    }
+	
+	
+    public function pinCodeCheck(Request $request)
+    {
+        $account = Session::get('currentAccount');
+        $account_id = $account->id;
+        $pickupPinCode = $account->pinCode;
+
+        $input = $request->all();
+        $pinCode = $input['data']['pinCode'];
+
+        $paymentmode="online";
+        $invoicevalue=rand(1,999999);
+        $avnkey="10393@5183";
+        $insurance="yes";
+        $service_type="normal";
+        $partner="";
+        $service="standard";
+        $request_url ='https://seller.shipyaari.com/logistic/webservice/SearchAvailability_new.php';
+
+        $post_data="&pickup_pincode=".$pickupPinCode."&delivery_pincode=".$pinCode."&weight=1.00&paymentmode=".$paymentmode."&invoicevalue=".$invoicevalue."&avnkey=".$avnkey."&service_type=".$service_type."&partner=".$partner."&service=".$service."&length=1.00&width=1.00&height=1.00";
+        $post = curl_init();
+
+        curl_setopt($post, CURLOPT_URL, $request_url);
+        curl_setopt($post, CURLOPT_POST,TRUE);
+        curl_setopt($post, CURLOPT_POSTFIELDS, json_encode($post_data));
+        curl_setopt($post, CURLOPT_RETURNTRANSFER, TRUE);
+        $response = curl_exec($post);
+        // print_r($response);
+        curl_close($post);
+
+        // $validate = $response[0];
+        $result = json_decode($response, true);
+        // print_r($result);exit;
+        return response()->json($result, 200);
+    }
+	
+	 public function addressCode(Request $request)
+    {
+        $account = Session::get('currentAccount');
+        $input = $request->all();
+        $addressCode = $input['data']['pinCode'];
+        $addressCodeId = $input['data']['pinCodeId'];
+        if($addressCode){
+            Session::put('addressCode',$addressCode);
+            Session::put('addressCodeID',$addressCodeId);
+        }
+        return response()->json(['status'=>'success'],200);
+    }
+}

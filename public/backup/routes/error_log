@@ -1,0 +1,4 @@
+[17-Nov-2020 16:42:07 UTC] PHP Fatal error:  Uncaught Error: Class 'Illuminate\Support\Facades\Route' not found in /home/geteagrx/public_html/Uniqueandcommon.com/globle_panel/routes/web.php:5
+Stack trace:
+#0 {main}
+  thrown in /home/geteagrx/public_html/Uniqueandcommon.com/globle_panel/routes/web.php on line 5
